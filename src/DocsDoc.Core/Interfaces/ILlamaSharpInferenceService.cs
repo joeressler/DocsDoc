@@ -51,5 +51,10 @@ namespace DocsDoc.Core.Interfaces
         /// Aggressively reset the chat session and history, fully re-instantiating all objects.
         /// </summary>
         void FullResetSession();
+
+        /// <summary>
+        /// Reload the model and fully reset all state (nuclear reset).
+        /// </summary>
+        Task NuclearResetAsync();
     }
 } 

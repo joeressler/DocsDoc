@@ -84,7 +84,7 @@ namespace DocsDoc.Desktop.ViewModels
         /// <summary>
         /// Check if document sources have changed and reset conversation if needed.
         /// </summary>
-        private void CheckAndResetConversationIfSourcesChanged()
+        private async void CheckAndResetConversationIfSourcesChanged()
         {
             var currentSources = _mainViewModel.GetSelectedDocumentSources().OrderBy(s => s).ToList();
             var lastSources = _lastSelectedSources.OrderBy(s => s).ToList();
@@ -99,13 +99,13 @@ namespace DocsDoc.Desktop.ViewModels
                 LoggingService.LogInfo($"Document sources changed from [{string.Join(", ", lastSources)}] to [{string.Join(", ", currentSources)}] - resetting conversation completely");
                 
                 // Force complete reset regardless of conversation state
-                ResetConversationContext();
+                await ResetConversationContext();
                 
                 // Add a system message to indicate the context change
                 ChatHistory.Add(new ChatMessage 
                 { 
                     Role = "System", 
-                    Text = $"📝 Context changed - now using sources: {(currentSources.Any() ? string.Join(", ", currentSources) : "general knowledge only")}"
+                    Text = $"📝 Context changed - now using sources: {(currentSources.Any() ? string.Join(", ", currentSources) : "general knowledge only")}" 
                 });
                 
                 LoggingService.LogInfo("Source change handled - conversation will be re-initialized on next message");
@@ -121,12 +121,12 @@ namespace DocsDoc.Desktop.ViewModels
         /// <summary>
         /// Reset the LLM conversation context without clearing the UI chat history.
         /// </summary>
-        private void ResetConversationContext()
+        private async Task ResetConversationContext()
         {
-            LoggingService.LogInfo("Aggressively resetting conversation context completely");
-            _llmService.FullResetSession();
+            LoggingService.LogInfo("Nuclear resetting conversation context and model");
+            await _llmService.NuclearResetAsync();
             _conversationStarted = false;
-            LoggingService.LogInfo("Conversation context reset - _conversationStarted set to false");
+            LoggingService.LogInfo("Conversation context and model reset - _conversationStarted set to false");
         }
 
         private async Task SendMessageAsync()
@@ -213,9 +213,7 @@ namespace DocsDoc.Desktop.ViewModels
         {
             LoggingService.LogInfo("Setting up conversation context with RAG information");
             
-            // Clear and rebuild chat history with proper context
-            _llmService.ClearChatHistory();
-            
+            // FullResetSession has already been called before this
             // Only try fallback retrieval if we have sources selected but no context found
             // DO NOT retrieve context if no sources are selected at all
             if (!contextChunks.Any() && selectedSources.Any())
@@ -238,6 +236,10 @@ namespace DocsDoc.Desktop.ViewModels
             var systemMessage = "You are a helpful, smart, kind, and efficient AI assistant. " +
                                "You always fulfill the user's requests to the best of your ability." + 
                                contextInfo;
+
+            LoggingService.LogInfo($"System message for new context: {systemMessage}");
+            LoggingService.LogInfo($"Context chunks for new context: {contextChunks.Count}");
+            foreach (var chunk in contextChunks) LoggingService.LogInfo($"Context chunk: {chunk}");
 
             _llmService.AddSystemMessage(systemMessage);
             LoggingService.LogInfo($"Conversation context setup completed with {contextChunks.Count} context chunks");

@@ -215,16 +215,25 @@ namespace DocsDoc.RAG
         }
 
         /// <summary>
-        /// Aggressively reset the chat session and history, fully re-instantiating all objects.
+        /// Aggressively reset the chat session and history, fully re-instantiating all objects. Do NOT add a default system message here.
         /// </summary>
         public void FullResetSession()
         {
             if (_executor == null)
                 throw new InvalidOperationException("Model not loaded.");
             _chatHistory = new ChatHistory();
-            _chatHistory.AddMessage(AuthorRole.System, "You are a helpful, smart, kind, and efficient AI assistant. You always fulfill the user's requests to the best of your ability.");
             _chatSession = new ChatSession(_executor, _chatHistory);
-            LoggingService.LogInfo("Aggressively reset chat session and history (new ChatHistory and ChatSession instantiated)");
+            LoggingService.LogInfo("Aggressively reset chat session and history (new ChatHistory and ChatSession instantiated, no system message added)");
+        }
+
+        /// <summary>
+        /// Reload the model and fully reset all state (nuclear reset).
+        /// </summary>
+        public async Task NuclearResetAsync()
+        {
+            LoggingService.LogInfo("Performing nuclear model reload (full model/context reset)");
+            await ReloadModelAsync(_modelPath!, _modelParams);
+            LoggingService.LogInfo("Nuclear model reload complete");
         }
 
         private void DisposeResources()
