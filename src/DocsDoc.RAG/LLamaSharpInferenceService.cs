@@ -40,11 +40,9 @@ namespace DocsDoc.RAG
                 _context = _model.CreateContext(_modelParams!);
                 _executor = new InteractiveExecutor(_context);
                 
-                // Initialize chat session with system prompt
-                _chatHistory = new ChatHistory();
-                _chatHistory.AddMessage(AuthorRole.System, 
-                    "You are a helpful, smart, kind, and efficient AI assistant. You always fulfill the user's requests to the best of your ability.");
-                _chatSession = new ChatSession(_executor, _chatHistory);
+                // Initialize chat session - system prompt will be added by the calling context (e.g., ChatViewModel)
+                _chatHistory = new ChatHistory(); // Initialize as empty
+                _chatSession = new ChatSession(_executor, _chatHistory); // Session with empty history
                 
                 LoggingService.LogInfo($"Model loaded: {_modelPath}");
             }
