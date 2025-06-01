@@ -78,6 +78,8 @@ namespace DocsDoc.Desktop.ViewModels
                 CheckAndResetConversationIfSourcesChanged();
             };
             
+            ChatHistory.CollectionChanged += (_, __) => ((RelayCommand)ClearChatCommand).RaiseCanExecuteChanged();
+            
             LoggingService.LogInfo("ChatViewModel initialized successfully");
         }
 
