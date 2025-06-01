@@ -1,0 +1,14 @@
+<!--
+    StatusBar.axaml
+    Purpose: Real-time inference, indexing, and crawling progress display.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
+             x:Class="DocsDoc.Desktop.Views.StatusBar"
+             x:DataType="vm:MainViewModel">
+    <DockPanel Height="30" Background="#EEE">
+        <TextBlock Text="{Binding Status}" Margin="10,0" VerticalAlignment="Center"/>
+        <!-- Add more status indicators as needed -->
+    </DockPanel>
+</UserControl> 

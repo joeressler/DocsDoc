@@ -1,0 +1,23 @@
+<!--
+    SettingsView.axaml
+    Purpose: UI for configuring model, RAG, and web scraper settings.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
+             x:Class="DocsDoc.Desktop.Views.SettingsView">
+    <StackPanel>
+        <!-- TODO: Bind to settings ViewModel -->
+        <TextBlock Text="Settings" FontWeight="Bold" Margin="10"/>
+        <TextBlock Text="Model Path:" Margin="5,10,0,0"/>
+        <TextBox Width="400" Margin="5"/>
+        <TextBlock Text="Backend:" Margin="5,10,0,0"/>
+        <ComboBox Width="200" Margin="5">
+            <ComboBoxItem Content="Cpu"/>
+            <ComboBoxItem Content="Cuda11"/>
+            <ComboBoxItem Content="Cuda12"/>
+            <ComboBoxItem Content="OpenCL"/>
+        </ComboBox>
+        <!-- Add more settings as needed -->
+    </StackPanel>
+</UserControl> 

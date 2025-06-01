@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="clr-namespace:DocsDoc.Desktop.Views"
+        xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="DocsDoc.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="DocsDoc - Main Window"
+        Width="900" Height="700">
+    <DockPanel>
+        <TabControl DockPanel.Dock="Top">
+            <TabItem Header="Chat">
+                <views:ChatView x:Name="ChatView" />
+            </TabItem>
+            <TabItem Header="Documents">
+                <views:DocumentManagementView x:Name="DocumentManagementView" />
+            </TabItem>
+            <TabItem Header="URL Ingestion">
+                <views:UrlIngestionView x:Name="UrlIngestionView" />
+            </TabItem>
+            <TabItem Header="Settings">
+                <views:SettingsView x:Name="SettingsView" />
+            </TabItem>
+        </TabControl>
+        <views:StatusBar DockPanel.Dock="Bottom" />
+    </DockPanel>
+</Window> 

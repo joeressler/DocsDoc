@@ -1,0 +1,7 @@
+This is a test document for DocsDoc.
+
+It contains some sample text that can be used to test the document ingestion and management functionality.
+
+The document has multiple paragraphs to ensure proper chunking and embedding generation.
+
+This should appear in the Documents list when the application starts up, and should be removable using the Remove Selected button. 

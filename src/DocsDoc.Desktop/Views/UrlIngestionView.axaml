@@ -1,0 +1,18 @@
+<!--
+    UrlIngestionView.axaml
+    Purpose: URL input and web scraping configuration interface.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
+             x:Class="DocsDoc.Desktop.Views.UrlIngestionView"
+             x:DataType="vm:UrlIngestionViewModel">
+    <StackPanel Margin="10">
+        <TextBlock Text="URL Ingestion" FontWeight="Bold" Margin="0,0,0,10"/>
+        <StackPanel Orientation="Horizontal">
+            <TextBox Width="500" Watermark="Enter documentation site or file URL..." Text="{Binding Url, Mode=TwoWay}"/>
+            <Button Content="Ingest" Command="{Binding IngestUrlCommand}" Margin="10,0,0,0"/>
+        </StackPanel>
+        <TextBlock Text="{Binding Progress}" Margin="0,10,0,0"/>
+    </StackPanel>
+</UserControl> 

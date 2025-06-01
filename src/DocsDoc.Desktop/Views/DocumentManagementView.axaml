@@ -1,0 +1,34 @@
+<!--
+    DocumentManagementView.axaml
+    Purpose: Import, index, and manage document sources.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
+             x:Class="DocsDoc.Desktop.Views.DocumentManagementView"
+             x:DataType="vm:MainViewModel">
+    <StackPanel Margin="10">
+        <TextBlock Text="Document Management" FontWeight="Bold" Margin="0,0,0,10"/>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+            <TextBlock Text="Check documents to include in RAG queries:" FontStyle="Italic"/>
+            <Button Content="Select All" Command="{Binding SelectAllForRagCommand}" Margin="10,0,5,0" FontSize="10" Padding="5,2"/>
+            <Button Content="Deselect All" Command="{Binding DeselectAllForRagCommand}" Margin="0,0,0,0" FontSize="10" Padding="5,2"/>
+        </StackPanel>
+        <ListBox x:Name="DocumentListBox" Height="300" ItemsSource="{Binding Documents}" SelectedItem="{Binding SelectedDocument, Mode=TwoWay}">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DocumentInfo">
+                    <StackPanel Orientation="Horizontal">
+                        <CheckBox IsChecked="{Binding IsSelectedForRag, Mode=TwoWay}" Margin="0,0,8,0" ToolTip.Tip="Include in RAG queries"/>
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Path}" FontStyle="Italic"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+            <Button Name="AddDocumentButton" Content="Add Document"/>
+            <Button Content="Re-Ingest Selected" Command="{Binding ReIngestDocumentCommand}" CommandParameter="{Binding SelectedDocument}" Margin="10,0,0,0"/>
+            <Button Content="Remove Selected" Command="{Binding RemoveDocumentCommand}" CommandParameter="{Binding SelectedDocument}" Margin="10,0,0,0"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl> 
