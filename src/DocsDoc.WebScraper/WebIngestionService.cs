@@ -19,36 +19,66 @@ namespace DocsDoc.WebScraper
     /// </summary>
     public class WebIngestionService
     {
-        private readonly UrlAnalyzer _analyzer = new UrlAnalyzer();
-        private readonly WebCrawler _crawler = new WebCrawler();
-        private readonly ContentExtractor _extractor = new ContentExtractor();
-        private readonly ContentDeduplicator _dedup = new ContentDeduplicator();
-        private readonly RateLimiter _rateLimiter = new RateLimiter();
-        private readonly ProgressTracker _progress = new ProgressTracker();
+        private readonly UrlAnalyzer _analyzer;
+        private readonly WebCrawler _crawler;
+        private readonly ContentExtractor _extractor;
+        private readonly ContentDeduplicator _dedup;
+        private readonly RateLimiter _rateLimiter;
+        private readonly ProgressTracker _progress;
         private readonly IDocumentProcessor _docProcessor;
         private readonly ITextChunker _chunker;
         private readonly IEmbeddingService _embedder;
         private readonly IVectorStore _vectorStore;
 
+        private readonly int _defaultChunkSize;
+        private readonly int _defaultChunkOverlap;
+
         /// <summary>
         /// Construct with RAG pipeline dependencies.
         /// </summary>
-        public WebIngestionService(IDocumentProcessor docProcessor, ITextChunker chunker, IEmbeddingService embedder, IVectorStore vectorStore)
+        public WebIngestionService(
+            IDocumentProcessor docProcessor, 
+            ITextChunker chunker, 
+            IEmbeddingService embedder, 
+            IVectorStore vectorStore,
+            string? userAgent = null,
+            int rateLimitSeconds = 2,
+            int maxConcurrentRequests = 2,
+            int maxCrawlDepth = 3,
+            List<string>? allowedDomains = null,
+            string? cachePath = null,
+            int defaultChunkSize = 200,
+            int defaultChunkOverlap = 50
+            )
         {
-            LoggingService.LogInfo("Initializing WebIngestionService");
+            LoggingService.LogInfo("Initializing WebIngestionService with extended configuration");
             _docProcessor = docProcessor;
             _chunker = chunker;
             _embedder = embedder;
             _vectorStore = vectorStore;
-            LoggingService.LogInfo("WebIngestionService initialized successfully");
+
+            _analyzer = new UrlAnalyzer();
+            _crawler = new WebCrawler(userAgent, maxCrawlDepth, allowedDomains, cachePath, maxConcurrentRequests);
+            _extractor = new ContentExtractor();
+            _dedup = new ContentDeduplicator();
+            _rateLimiter = new RateLimiter(TimeSpan.FromSeconds(rateLimitSeconds));
+            _progress = new ProgressTracker();
+
+            _defaultChunkSize = defaultChunkSize;
+            _defaultChunkOverlap = defaultChunkOverlap;
+
+            LoggingService.LogInfo("WebIngestionService initialized successfully with extended configuration");
         }
 
         /// <summary>
         /// Ingest a URL (file or docs site) and index all discovered content into the RAG pipeline.
         /// </summary>
-        public async Task IngestUrlAsync(string url, int chunkSize = 200, int overlap = 50, Action<string>? progress = null)
+        public async Task IngestUrlAsync(string url, int? chunkSize = null, int? overlap = null, Action<string>? progress = null)
         {
-            LoggingService.LogInfo($"Starting URL ingestion: {url} (chunkSize: {chunkSize}, overlap: {overlap})");
+            var currentChunkSize = chunkSize ?? _defaultChunkSize;
+            var currentOverlap = overlap ?? _defaultChunkOverlap;
+
+            LoggingService.LogInfo($"Starting URL ingestion: {url} (chunkSize: {currentChunkSize}, overlap: {currentOverlap})");
             
             try
             {
@@ -58,13 +88,13 @@ namespace DocsDoc.WebScraper
                 
                 if (type == UrlType.File)
                 {
-                    await IngestFileUrlAsync(url, chunkSize, overlap, progress);
+                    await IngestFileUrlAsync(url, currentChunkSize, currentOverlap, progress);
                     return;
                 }
                 
                 if (type == UrlType.DocsSite)
                 {
-                    await IngestDocsSiteAsync(url, chunkSize, overlap, progress);
+                    await IngestDocsSiteAsync(url, currentChunkSize, currentOverlap, progress);
                     return;
                 }
                 
@@ -120,7 +150,7 @@ namespace DocsDoc.WebScraper
             int count = 0;
             int duplicateCount = 0;
             
-            await foreach (var (pageUrl, html) in _crawler.Crawl(url, maxDepth: 2))
+            await foreach (var (pageUrl, html) in _crawler.Crawl(url))
             {
                 try
                 {

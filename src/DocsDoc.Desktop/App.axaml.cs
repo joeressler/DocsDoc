@@ -13,7 +13,7 @@ public partial class App : Application
     /// <summary>
     /// Loaded application configuration, accessible globally.
     /// </summary>
-    public static Configuration? AppConfig { get; private set; }
+    public static Configuration? AppConfig { get; set; }
 
     public override void Initialize()
     {
@@ -26,12 +26,17 @@ public partial class App : Application
     {
         try
         {
-            LoggingService.LogInfo("Framework initialization completed, loading configuration...");
-            
-            // Load configuration from appsettings.json at startup
-            var configService = new ConfigurationService();
-            AppConfig = configService.Load();
-            LoggingService.LogInfo("Configuration loaded successfully.");
+            LoggingService.LogInfo("Framework initialization completed.");
+            // Configuration is now loaded and set in Program.cs before Avalonia starts.
+            // AppConfig should already be populated.
+
+            if (AppConfig == null)
+            {
+                // This is a fallback or error condition, as Program.cs should have loaded it.
+                LoggingService.LogError("AppConfig was not loaded by Program.cs. Attempting to load now.", null);
+                var configService = new ConfigurationService();
+                AppConfig = configService.Load();
+            }
 
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {

@@ -16,15 +16,18 @@ class Program
     {
         try
         {
-            // Configure logging first
-            LoggingService.Configure("logs/docsdoc.log");
-            LoggingService.LogInfo("DocsDoc Desktop starting up...");
-            
-            // Load configuration from single source of truth
-            LoggingService.LogInfo("Loading configuration...");
+            // Load configuration first to get log path
             var configService = new ConfigurationService();
             var config = configService.Load();
-            var modelPath = config.ModelPath ?? "";
+            App.AppConfig = config; // Set it early for global access
+
+            // Configure logging using path from config
+            LoggingService.Configure(App.AppConfig.Logging?.LogFilePath);
+            LoggingService.LogInfo("DocsDoc Desktop starting up...");
+            
+            var modelPath = App.AppConfig.Model?.Path ?? "";
+            var modelContextSize = App.AppConfig.Model?.ContextSize ?? 512;
+            var modelGpuLayers = App.AppConfig.Model?.GpuLayerCount ?? 0;
             
             // Test LlamaSharp model loading first
             LoggingService.LogInfo($"Testing LlamaSharp model loading from: {modelPath}");
@@ -39,8 +42,8 @@ class Program
             
             var parameters = new ModelParams(modelPath)
             {
-                ContextSize = 512, // Small context for testing
-                GpuLayerCount = 0  // CPU only for now
+                ContextSize = (uint)modelContextSize, 
+                GpuLayerCount = modelGpuLayers
             };
             
             LoggingService.LogInfo("Loading LlamaSharp model...");

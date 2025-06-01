@@ -35,13 +35,27 @@ namespace DocsDoc.Desktop.ViewModels
             set { _selectedDocument = value; OnPropertyChanged(nameof(SelectedDocument)); }
         }
 
-        public MainViewModel(string modelPath, string dbPath)
+        public MainViewModel()
         {
+            // Use App.AppConfig for paths
+            var modelPath = App.AppConfig?.Model?.Path ?? "";
+            var dbPath = App.AppConfig?.Database?.VectorStorePath ?? "rag.sqlite";
+            var ragChunkSize = App.AppConfig?.RAG?.ChunkSize ?? 512;
+            var ragChunkOverlap = App.AppConfig?.RAG?.ChunkOverlap ?? 64;
+            var ragRetrievalTopK = App.AppConfig?.RAG?.RetrievalTopK ?? 5;
+
+            var webScraperUserAgent = App.AppConfig?.WebScraper?.UserAgent;
+            var webScraperRateLimit = App.AppConfig?.WebScraper?.RateLimitSeconds ?? 2;
+            var webScraperMaxConcurrent = App.AppConfig?.WebScraper?.MaxConcurrentRequests ?? 2;
+            var webScraperMaxDepth = App.AppConfig?.WebScraper?.MaxCrawlDepth ?? 3;
+            var webScraperAllowedDomains = App.AppConfig?.WebScraper?.AllowedDomains;
+            var webScraperCachePath = App.AppConfig?.WebScraper?.CachePath;
+
             LoggingService.LogInfo($"Initializing MainViewModel with model: {modelPath}, db: {dbPath}");
             try
             {
-                Orchestrator = new RagOrchestrator(modelPath, dbPath);
-                WebIngestor = Orchestrator.GetWebIngestionService();
+                Orchestrator = new RagOrchestrator(modelPath, dbPath, ragChunkSize, ragChunkOverlap, ragRetrievalTopK);
+                WebIngestor = Orchestrator.GetWebIngestionService(webScraperUserAgent, webScraperRateLimit, webScraperMaxConcurrent, webScraperMaxDepth, webScraperAllowedDomains, webScraperCachePath);
                 IngestDocumentCommand = new RelayCommand(async path => await IngestDocumentAsync(path as string), path => path is string s && !string.IsNullOrWhiteSpace(s));
                 RemoveDocumentCommand = new RelayCommand(async doc => await RemoveDocumentAsync(doc as DocumentInfo), doc => doc is DocumentInfo);
                 ReIngestDocumentCommand = new RelayCommand(async doc => await ReIngestDocumentAsync(doc as DocumentInfo), doc => doc is DocumentInfo);

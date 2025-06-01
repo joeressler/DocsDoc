@@ -27,6 +27,10 @@ namespace DocsDoc.RAG
         private readonly ILlamaSharpInferenceService _llm;
         private bool _disposed = false;
 
+        private readonly int _ragChunkSize;
+        private readonly int _ragChunkOverlap;
+        private readonly int _ragRetrievalTopK;
+
         /// <summary>
         /// Exposes the LlamaSharp inference service for direct access to chat and generation APIs.
         /// </summary>
@@ -37,7 +41,8 @@ namespace DocsDoc.RAG
         /// </summary>
         public IVectorStore VectorStore => _vectorStore;
 
-        public RagOrchestrator(string modelPath, string dbPath)
+        public RagOrchestrator(string modelPath, string dbPath, 
+                                int ragChunkSize = 512, int ragChunkOverlap = 64, int ragRetrievalTopK = 5)
         {
             _docProcessor = new DefaultDocumentProcessor();
             _chunker = new DefaultTextChunker();
@@ -46,18 +51,24 @@ namespace DocsDoc.RAG
             _vectorStore = new SqliteVectorStore(dbPath);
             _retriever = new DefaultRetrievalEngine(_embedder, _vectorStore);
             _contextAugmenter = new DefaultContextAugmenter();
+
+            _ragChunkSize = ragChunkSize;
+            _ragChunkOverlap = ragChunkOverlap;
+            _ragRetrievalTopK = ragRetrievalTopK;
         }
 
         /// <summary>
         /// Ingest a document: extract, chunk, embed, and store.
         /// </summary>
-        public async Task IngestDocumentAsync(string filePath, int chunkSize = 200, int overlap = 50)
+        public async Task IngestDocumentAsync(string filePath, int? chunkSize = null, int? overlap = null)
         {
+            var currentChunkSize = chunkSize ?? _ragChunkSize;
+            var currentOverlap = overlap ?? _ragChunkOverlap;
             var text = await _docProcessor.ExtractTextAsync(filePath);
-            var chunks = _chunker.ChunkText(text, chunkSize, overlap);
+            var chunks = _chunker.ChunkText(text, currentChunkSize, currentOverlap);
             var embeddings = await _embedder.EmbedAsync(chunks);
-            var ids = chunks.Select((_, i) => $"{Path.GetFileName(filePath)}_{i}");
-            await _vectorStore.AddAsync(embeddings, chunks, ids);
+            var documentSourceIds = Enumerable.Repeat(filePath, chunks.Count).ToList();
+            await _vectorStore.AddAsync(embeddings, chunks, documentSourceIds);
         }
 
         /// <summary>
@@ -67,9 +78,10 @@ namespace DocsDoc.RAG
         /// <param name="topK">Number of top chunks to retrieve</param>
         /// <param name="inferenceParams">LLM inference parameters</param>
         /// <param name="documentSources">Optional filter to limit retrieval to specific document sources</param>
-        public async Task<string> QueryAsync(string userQuery, int topK = 5, object? inferenceParams = null, IEnumerable<string>? documentSources = null)
+        public async Task<string> QueryAsync(string userQuery, int? topK = null, object? inferenceParams = null, IEnumerable<string>? documentSources = null)
         {
-            var contextChunks = await _retriever.RetrieveRelevantChunksAsync(userQuery, topK, documentSources);
+            var currentTopK = topK ?? _ragRetrievalTopK;
+            var contextChunks = await _retriever.RetrieveRelevantChunksAsync(userQuery, currentTopK, documentSources);
             var prompt = _contextAugmenter.BuildPrompt(userQuery, contextChunks);
             return await _llm.GenerateAsync(prompt, inferenceParams);
         }
@@ -77,9 +89,16 @@ namespace DocsDoc.RAG
         /// <summary>
         /// Get a WebIngestionService wired to this orchestrator's RAG pipeline.
         /// </summary>
-        public WebIngestionService GetWebIngestionService()
+        public WebIngestionService GetWebIngestionService(
+            string? userAgent = null,
+            int rateLimitSeconds = 2,
+            int maxConcurrentRequests = 2,
+            int maxCrawlDepth = 3,
+            IEnumerable<string>? allowedDomains = null,
+            string? cachePath = null)
         {
-            return new WebIngestionService(_docProcessor, _chunker, _embedder, _vectorStore);
+            return new WebIngestionService(_docProcessor, _chunker, _embedder, _vectorStore, 
+                                           userAgent, rateLimitSeconds, maxConcurrentRequests, maxCrawlDepth, allowedDomains?.ToList(), cachePath);
         }
 
         /// <summary>

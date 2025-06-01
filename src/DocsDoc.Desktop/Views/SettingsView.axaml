@@ -5,19 +5,144 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
-             x:Class="DocsDoc.Desktop.Views.SettingsView">
-    <StackPanel>
-        <!-- TODO: Bind to settings ViewModel -->
-        <TextBlock Text="Settings" FontWeight="Bold" Margin="10"/>
-        <TextBlock Text="Model Path:" Margin="5,10,0,0"/>
-        <TextBox Width="400" Margin="5"/>
-        <TextBlock Text="Backend:" Margin="5,10,0,0"/>
-        <ComboBox Width="200" Margin="5">
-            <ComboBoxItem Content="Cpu"/>
-            <ComboBoxItem Content="Cuda11"/>
-            <ComboBoxItem Content="Cuda12"/>
-            <ComboBoxItem Content="OpenCL"/>
-        </ComboBox>
-        <!-- Add more settings as needed -->
-    </StackPanel>
+             xmlns:converters="clr-namespace:DocsDoc.Desktop.Converters"
+             x:Class="DocsDoc.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.Subtitle">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="Gray"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <converters:StringListToStringConverter x:Key="StringListConverter"/>
+    </UserControl.Resources>
+
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" Margin="0,0,5,0"/>
+            <Button Content="Reload Settings" Command="{Binding LoadSettingsCommand}" Margin="5,0,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer>
+            <StackPanel Spacing="10">
+                <TextBlock Text="Application Settings" Classes="h2" Margin="0,0,0,5"/>
+
+                <!-- Model Settings -->
+                <Expander Header="Model Settings" IsExpanded="True">
+                    <StackPanel Margin="20,5,5,5" Spacing="5">
+                        <TextBlock Text="LLM Model Path:"/>
+                        <TextBlock Classes="Subtitle" Text="Path to the primary GGUF model file for text generation and, if no separate embedding model is specified, for generating embeddings."/>
+                        <TextBox Text="{Binding CurrentConfiguration.Model.Path, Mode=TwoWay}" Watermark="e.g., C:\models\llama-3-8b-instruct.Q6_K.gguf"/>
+                        
+                        <TextBlock Text="Embedding Model Path (Optional):" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Path to a GGUF model file specifically for generating embeddings. If left blank, the main LLM Model Path will be used for embeddings."/>
+                        <TextBox Text="{Binding CurrentConfiguration.Model.EmbeddingModelPath, Mode=TwoWay}" Watermark="e.g., C:\models\all-MiniLM-L6-v2.Q4_K_M.gguf (optional)"/>
+                        
+                        <TextBlock Text="Backend Acceleration:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Hardware acceleration backend. Requires appropriate drivers and hardware. 'Cpu' is the most compatible. Restart required after changing." ToolTip.Tip="Cpu: Runs on CPU only. Cuda11/Cuda12: Use NVIDIA GPU (requires CUDA drivers). OpenCL: Use OpenCL compatible GPUs (AMD, Intel, NVIDIA). Vulkan: Use Vulkan compatible GPUs. Metal: For Apple Silicon (macOS)."/>
+                        <ComboBox ItemsSource="{Binding AvailableBackends}" SelectedItem="{Binding CurrentConfiguration.Model.Backend, Mode=TwoWay}"/>
+                        
+                        <TextBlock Text="Context Size (Tokens):" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Maximum number of tokens the model considers for generating a response. Higher values consume more VRAM/RAM but allow for longer conversations and context."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.Model.ContextSize, Mode=TwoWay}" Minimum="256" Maximum="8192" Increment="128"/>
+                        
+                        <TextBlock Text="GPU Layers (0 for CPU only):" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Number of model layers to offload to the GPU. 0 means CPU only. Higher values increase GPU usage and speed up inference but require more VRAM. Set according to your GPU's VRAM capacity." ToolTip.Tip="For NVIDIA GPUs (CUDA/Vulkan) or AMD GPUs (OpenCL/Vulkan). Exact number depends on the model size and your GPU VRAM. If unsure, start with a lower number (e.g., 10-20) and increase if stable."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.Model.GpuLayerCount, Mode=TwoWay}" Minimum="0" Maximum="1000" Increment="1"/>
+                    </StackPanel>
+                </Expander>
+
+                <!-- Database Settings -->
+                <Expander Header="Database Settings" IsExpanded="True">
+                    <StackPanel Margin="20,5,5,5" Spacing="5">
+                        <TextBlock Text="Vector Store Path:"/>
+                        <TextBlock Classes="Subtitle" Text="Path to the SQLite database file used for storing document embeddings (vector store)."/>
+                        <TextBox Text="{Binding CurrentConfiguration.Database.VectorStorePath, Mode=TwoWay}" Watermark="e.g., C:\data\rag_vectors.sqlite"/>
+                    </StackPanel>
+                </Expander>
+
+                <!-- RAG Settings -->
+                <Expander Header="RAG Settings" IsExpanded="True">
+                    <StackPanel Margin="20,5,5,5" Spacing="5">
+                        <TextBlock Text="Chunk Size (Tokens):"/>
+                        <TextBlock Classes="Subtitle" Text="Size of text chunks (in tokens) when processing documents for RAG. Smaller chunks provide more specific context but may miss broader topics." ToolTip.Tip="Affects how documents are broken down before embedding. Typical values range from 128 to 1024. Depends on the model's context window and the nature of your documents."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.RAG.ChunkSize, Mode=TwoWay}" Minimum="64" Maximum="2048" Increment="64"/>
+                        
+                        <TextBlock Text="Chunk Overlap (Tokens):" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Number of tokens to overlap between consecutive chunks. Helps maintain context across chunk boundaries." ToolTip.Tip="Prevents loss of context at the edges of chunks. A common value is 10-20% of the Chunk Size."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.RAG.ChunkOverlap, Mode=TwoWay}" Minimum="0" Maximum="512" Increment="16"/>
+                        
+                        <TextBlock Text="Retrieval Top K Chunks:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Number of most relevant document chunks to retrieve and provide to the LLM as context for answering a query." ToolTip.Tip="More chunks provide more context but increase the prompt size and can sometimes confuse the model if irrelevant chunks are included. Usually between 3 to 10."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.RAG.RetrievalTopK, Mode=TwoWay}" Minimum="1" Maximum="20" Increment="1"/>
+                    </StackPanel>
+                </Expander>
+
+                <!-- Web Scraper Settings -->
+                <Expander Header="Web Scraper Settings">
+                    <StackPanel Margin="20,5,5,5" Spacing="5">
+                        <TextBlock Text="User Agent:"/>
+                        <TextBlock Classes="Subtitle" Text="The User-Agent string the web scraper uses when making HTTP requests. Some sites may block default or common bot agents." ToolTip.Tip="Example: MyDocsFetcher/1.0 (me@example.com). Be a good internet citizen; provide a way to contact you if your bot causes issues."/>
+                        <TextBox Text="{Binding CurrentConfiguration.WebScraper.UserAgent, Mode=TwoWay}"/>
+                        
+                        <TextBlock Text="Rate Limit (Seconds between requests per domain):" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Minimum time to wait between consecutive requests to the same domain to avoid overloading servers." ToolTip.Tip="0 means no rate limiting, which is strongly discouraged for public websites."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.WebScraper.RateLimitSeconds, Mode=TwoWay}" Minimum="0" Maximum="60" Increment="1"/>
+                        
+                        <TextBlock Text="Max Concurrent Requests:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Maximum number of parallel requests the web scraper will make. Higher values can speed up crawling but increase server load." ToolTip.Tip="Currently informational; concurrency control is not yet fully implemented in the crawler."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.WebScraper.MaxConcurrentRequests, Mode=TwoWay}" Minimum="1" Maximum="10" Increment="1"/>
+                        
+                        <TextBlock Text="Max Crawl Depth:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="How many links deep the scraper will follow from the initial URL. 0 means only the initial page." ToolTip.Tip="Higher values can discover more content but may take much longer and retrieve irrelevant pages."/>
+                        <NumericUpDown Value="{Binding CurrentConfiguration.WebScraper.MaxCrawlDepth, Mode=TwoWay}" Minimum="0" Maximum="10" Increment="1"/>
+                        
+                        <TextBlock Text="Allowed Domains (comma or semicolon separated):" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="List of domains the scraper is allowed to visit. If empty, it will only stay on the domain of the initial URL." ToolTip.Tip="Example: docs.avaloniaui.net, github.com/AvaloniaUI. Links to other domains will be ignored."/>
+                        <TextBox Text="{Binding CurrentConfiguration.WebScraper.AllowedDomains, Mode=TwoWay, Converter={StaticResource StringListConverter}}" Watermark="e.g., example.com, anotherexample.org" AcceptsReturn="False"/>
+                        
+                        <TextBlock Text="Cache Path:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Directory to store cached web pages to avoid re-downloading during development or repeated crawls." ToolTip.Tip="Currently informational; caching is not yet fully implemented in the crawler."/>
+                        <TextBox Text="{Binding CurrentConfiguration.WebScraper.CachePath, Mode=TwoWay}" Watermark="e.g., C:\data\web_cache"/>
+                    </StackPanel>
+                </Expander>
+
+                <!-- Logging Settings -->
+                <Expander Header="Logging Settings">
+                    <StackPanel Margin="20,5,5,5" Spacing="5">
+                        <TextBlock Text="Log File Path:"/>
+                        <TextBlock Classes="Subtitle" Text="Path to the application's log file. Logs contain diagnostic information and errors."/>
+                        <TextBox Text="{Binding CurrentConfiguration.Logging.LogFilePath, Mode=TwoWay}" Watermark="e.g., C:\logs\docsdoc.log"/>
+                        
+                        <TextBlock Text="Default Log Level:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Minimum severity for general log messages to be recorded." ToolTip.Tip="Verbose: Most detailed. Debug: For diagnostics. Information: Standard app flow. Warning: Potential issues. Error: Failures. Fatal: Critical crashes."/>
+                        <ComboBox ItemsSource="{Binding AvailableLogLevels}" SelectedItem="{Binding CurrentConfiguration.Logging.LogLevel.Default, Mode=TwoWay}"/>
+                        
+                        <TextBlock Text="Microsoft Log Level:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Minimum severity for log messages originating from Microsoft libraries (e.g., ASP.NET Core, Entity Framework)."/>
+                        <ComboBox ItemsSource="{Binding AvailableLogLevels}" SelectedItem="{Binding CurrentConfiguration.Logging.LogLevel.Microsoft, Mode=TwoWay}"/>
+                        
+                        <TextBlock Text="Microsoft Hosting Lifetime Log Level:" Margin="0,8,0,0"/>
+                        <TextBlock Classes="Subtitle" Text="Minimum severity for log messages specifically from Microsoft.Extensions.Hosting lifetime events (application start/stop)."/>
+                        <ComboBox ItemsSource="{Binding AvailableLogLevels}" SelectedItem="{Binding CurrentConfiguration.Logging.LogLevel.MicrosoftHostingLifetime, Mode=TwoWay}"/>
+                    </StackPanel>
+                </Expander>
+                
+                <!-- UI Settings -->
+                <Expander Header="UI Settings">
+                    <StackPanel Margin="20,5,5,5" Spacing="5">
+                        <TextBlock Text="Theme:"/>
+                        <TextBlock Classes="Subtitle" Text="Application theme (Light, Dark, or Default to follow system). Restart may be required for some theme changes to fully apply."/>
+                        <ComboBox ItemsSource="{Binding AvailableThemes}" SelectedItem="{Binding CurrentConfiguration.UI.Theme, Mode=TwoWay}"/>
+                    </StackPanel>
+                </Expander>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </UserControl> 

@@ -8,6 +8,8 @@ namespace DocsDoc.Desktop.Views;
 
 public partial class MainWindow : Window
 {
+    private readonly ConfigurationService _configService;
+
     public MainWindow()
     {
         LoggingService.LogInfo("Initializing MainWindow");
@@ -16,14 +18,15 @@ public partial class MainWindow : Window
             InitializeComponent();
             LoggingService.LogInfo("MainWindow InitializeComponent completed");
             
-            // Load configuration from single source of truth
-            var configService = new ConfigurationService();
-            var config = configService.Load();
-            string modelPath = config.ModelPath ?? "";
-            string dbPath = config.DatabasePath ?? "rag.sqlite";
+            _configService = new ConfigurationService();
+            var config = _configService.Load();
+            App.AppConfig = config;
+            
+            string modelPath = config.Model?.Path ?? "";
+            string dbPath = config.Database?.VectorStorePath ?? "rag.sqlite";
             
             LoggingService.LogInfo($"Creating MainViewModel with model: {modelPath}, db: {dbPath}");
-            var mainVM = new MainViewModel(modelPath, dbPath);
+            var mainVM = new MainViewModel();
             DataContext = mainVM;
             LoggingService.LogInfo("MainViewModel set as DataContext");
 
@@ -63,6 +66,17 @@ public partial class MainWindow : Window
             else
             {
                 LoggingService.LogInfo("UrlIngestionView control not found, skipping UrlIngestionViewModel setup");
+            }
+
+            var settingsView = this.FindControl<UserControl>("SettingsView");
+            if (settingsView != null)
+            {
+                settingsView.DataContext = new SettingsViewModel(_configService);
+                LoggingService.LogInfo("SettingsViewModel setup completed");
+            }
+            else
+            {
+                LoggingService.LogInfo("SettingsView control not found, skipping SettingsViewModel setup");
             }
         }
         catch (Exception ex)
