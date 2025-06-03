@@ -13,11 +13,16 @@ namespace DocsDoc.RAG.Embedding
     /// <summary>
     /// Embedding service using LlamaSharp. Implements IEmbeddingProvider for embedding-only use.
     /// </summary>
-    public class LlamaSharpEmbeddingService : IEmbeddingProvider
+    public class LlamaSharpEmbeddingService : IEmbeddingProvider, ITokenCountingProvider
     {
         private readonly ModelSettings _modelSettings;
         private readonly LLamaWeights _embeddingModel;
         private readonly LLamaContext _embeddingContext;
+
+        /// <summary>
+        /// Exposes the underlying LLamaContext for tokenization and context window info.
+        /// </summary>
+        public LLamaContext EmbeddingContext => _embeddingContext;
 
         public LlamaSharpEmbeddingService(ModelSettings modelSettings)
         {
@@ -60,5 +65,8 @@ namespace DocsDoc.RAG.Embedding
             }
             return results;
         }
+
+        public int CountTokens(string text) => LlamaTokenUtil.CountTokens(text, _embeddingContext);
+        public int MaxContextTokens => _modelSettings.ContextSize;
     }
 } 

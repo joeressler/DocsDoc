@@ -22,7 +22,7 @@
                             <CheckBox IsChecked="{Binding IsSelectedForRag, Mode=TwoWay}" Margin="0,0,8,0" ToolTip.Tip="Include in RAG queries"/>
                             <TextBlock Text="{Binding GroupName}" FontWeight="Bold" Margin="0,0,8,0"/>
                             <TextBlock Text="{Binding BaseUrl}" FontStyle="Italic"/>
-                            <TextBlock Text="({Binding PageCount} pages)" Margin="8,0,0,0"/>
+                            <TextBlock Text="({Binding PageCount} pages)" Margin="8,0,0,0" IsVisible="{Binding IsGroup}"/>
                         </StackPanel>
                         <Expander Header="Show Pages" Margin="24,2,0,0">
                             <ItemsControl ItemsSource="{Binding Pages}">

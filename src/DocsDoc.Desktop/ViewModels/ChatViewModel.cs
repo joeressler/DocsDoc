@@ -41,17 +41,25 @@ namespace DocsDoc.Desktop.ViewModels
         public ICommand ClearChatCommand { get; }
 
         /// <summary>
-        /// Display text showing which document sources are currently active for RAG.
+        /// List of active group names (not URLs) for RAG, grouped as in DocumentManagementView.
+        /// </summary>
+        public IEnumerable<string> ActiveGroupNames =>
+            _mainViewModel.Documents
+                .Where(d => d.IsSelectedForRag)
+                .Select(d => d.Name)
+                .Distinct();
+
+        /// <summary>
+        /// Display text showing which document groups are currently active for RAG.
         /// </summary>
         public string ActiveSourcesText
         {
             get
             {
-                var selectedSources = _mainViewModel.GetSelectedDocumentSources().ToList();
-                if (!selectedSources.Any())
-                    return "No document sources selected - chat will use general knowledge only.";
-                
-                return $"Active document sources for RAG: {string.Join(", ", selectedSources)}";
+                var groupNames = ActiveGroupNames.ToList();
+                if (!groupNames.Any())
+                    return "No document groups selected - chat will use general knowledge only.";
+                return $"Active document groups for RAG: {string.Join(", ", groupNames)}";
             }
         }
 

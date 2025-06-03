@@ -13,6 +13,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using LLama; // For LLamaContext from LLamaSharp
 
 namespace DocsDoc.WebScraper
 {
@@ -33,6 +34,7 @@ namespace DocsDoc.WebScraper
         private readonly IVectorStore _vectorStore;
         private readonly WebScraperSettings _webScraperSettings;
         private readonly RagSettings _ragSettings;
+        private readonly ITokenCountingProvider? _tokenCounter;
 
         /// <summary>
         /// Construct with RAG pipeline dependencies.
@@ -43,7 +45,8 @@ namespace DocsDoc.WebScraper
             IEmbeddingProvider embedder, 
             IVectorStore vectorStore,
             WebScraperSettings webScraperSettings,
-            RagSettings ragSettings)
+            RagSettings ragSettings,
+            ITokenCountingProvider? tokenCounter = null)
         {
             LoggingService.LogInfo("Initializing WebIngestionService with WebScraperSettings and RagSettings");
             _docProcessor = docProcessor;
@@ -58,6 +61,7 @@ namespace DocsDoc.WebScraper
             _dedup = new ContentDeduplicator();
             _rateLimiter = new RateLimiter(_webScraperSettings);
             _progress = new ProgressTracker();
+            _tokenCounter = tokenCounter;
             LoggingService.LogInfo("WebIngestionService initialized successfully with WebScraperSettings and RagSettings");
         }
 
@@ -81,23 +85,23 @@ namespace DocsDoc.WebScraper
                 if (!_webScraperSettings.AllowedDomains.Contains(enteredDomain, StringComparer.OrdinalIgnoreCase))
                     _webScraperSettings.AllowedDomains.Add(enteredDomain);
 
-                var type = _analyzer.Analyze(url);
-                LoggingService.LogInfo($"URL analysis result: {url} -> {type}");
-                progress?.Report($"Analyzed URL: {url} as {type}");
+                var analysis = _analyzer.Analyze(url);
+                LoggingService.LogInfo($"URL analysis result: {url} -> {analysis.Type}");
+                progress?.Report($"Analyzed URL: {url} as {analysis.Type}");
                 cancellationToken.ThrowIfCancellationRequested();
-                if (type == UrlType.File)
+                if (analysis.Type == UrlType.File)
                 {
                     await IngestFileUrlAsync(url, currentChunkSize, currentOverlap, progress, cancellationToken);
                     return;
                 }
-                if (type == UrlType.DocsSite)
+                if (analysis.Type == UrlType.DocsSite)
                 {
                     var docsBase = baseDocsUrl ?? new Uri(url).GetLeftPart(UriPartial.Authority);
                     await IngestDocsSiteAsync(url, groupName, docsBase, currentChunkSize, currentOverlap, progress, cancellationToken);
                     return;
                 }
-                LoggingService.LogInfo($"URL type not supported for ingestion: {type}");
-                progress?.Report($"URL type not supported for ingestion: {type}");
+                LoggingService.LogInfo($"URL type not supported for ingestion: {analysis.Type}");
+                progress?.Report($"URL type not supported for ingestion: {analysis.Type}");
             }
             catch (OperationCanceledException)
             {
@@ -208,22 +212,31 @@ namespace DocsDoc.WebScraper
             cancellationToken.ThrowIfCancellationRequested();
             var chunks = _chunker.ChunkText(text, chunkSize, overlap);
 
-            // Filter or split chunks that are too long for the model
-            int maxContext = _ragSettings?.ChunkSize ?? 1024; // Or get from model settings
+            int maxContext = _tokenCounter?.MaxContextTokens ?? (_ragSettings?.ChunkSize ?? 1024);
             var safeChunks = new List<string>();
             foreach (var chunk in chunks)
             {
-                if (chunk.Length > maxContext)
+                bool isSafe = true;
+                if (_tokenCounter != null)
                 {
-                    LoggingService.LogInfo($"Chunk too long for context window, splitting further. Source: {pageUrl}");
-                    // Split further (e.g., by half, or by sentence)
+                    int tokenCount = _tokenCounter.CountTokens(chunk);
+                    if (tokenCount > maxContext)
+                    {
+                        LoggingService.LogInfo($"Chunk too long for context window in tokens ({tokenCount} > {maxContext}), splitting further. Source: {pageUrl}");
+                        var subChunks = SplitChunkByTokens(chunk, maxContext);
+                        safeChunks.AddRange(subChunks);
+                        isSafe = false;
+                    }
+                }
+                else if (chunk.Length > maxContext)
+                {
+                    LoggingService.LogInfo($"Chunk too long for context window in chars, splitting further. Source: {pageUrl}");
                     var subChunks = _chunker.ChunkText(chunk, maxContext, 0);
                     safeChunks.AddRange(subChunks);
+                    isSafe = false;
                 }
-                else
-                {
+                if (isSafe)
                     safeChunks.Add(chunk);
-                }
             }
 
             LoggingService.LogInfo($"Text chunked into {safeChunks.Count} safe chunks for source: {pageUrl}");
@@ -235,6 +248,75 @@ namespace DocsDoc.WebScraper
             await _vectorStore.AddAsync(embeddings, safeChunks, ids);
             LoggingService.LogInfo($"Text ingestion completed for source: {pageUrl}");
             progress?.Report($"Text ingestion completed for source: {pageUrl}");
+        }
+
+        /// <summary>
+        /// Recursively splits a chunk into subchunks that fit within the token limit.
+        /// </summary>
+        private List<string> SplitChunkByTokens(string chunk, int maxTokens)
+        {
+            var result = new List<string>();
+            if (_tokenCounter == null)
+            {
+                result.Add(chunk);
+                return result;
+            }
+            int tokenCount = _tokenCounter.CountTokens(chunk);
+            if (tokenCount <= maxTokens)
+            {
+                result.Add(chunk);
+                return result;
+            }
+            var sentences = chunk.Split(new[] {'.', '!', '?'}, StringSplitOptions.RemoveEmptyEntries);
+            var current = "";
+            foreach (var sentence in sentences)
+            {
+                var candidate = string.IsNullOrEmpty(current) ? sentence : current + ". " + sentence;
+                int candidateTokens = _tokenCounter.CountTokens(candidate);
+                if (candidateTokens > maxTokens)
+                {
+                    if (!string.IsNullOrEmpty(current))
+                    {
+                        result.Add(current.Trim());
+                        current = sentence;
+                    }
+                    else
+                    {
+                        var words = sentence.Split(' ');
+                        var wordChunk = new List<string>();
+                        foreach (var word in words)
+                        {
+                            wordChunk.Add(word);
+                            var wordCandidate = string.Join(" ", wordChunk);
+                            if (_tokenCounter.CountTokens(wordCandidate) > maxTokens)
+                            {
+                                wordChunk.RemoveAt(wordChunk.Count - 1);
+                                if (wordChunk.Count > 0)
+                                    result.Add(string.Join(" ", wordChunk));
+                                wordChunk = new List<string> { word };
+                            }
+                        }
+                        if (wordChunk.Count > 0)
+                            result.Add(string.Join(" ", wordChunk));
+                        current = "";
+                    }
+                }
+                else
+                {
+                    current = candidate;
+                }
+            }
+            if (!string.IsNullOrEmpty(current))
+                result.Add(current.Trim());
+            var final = new List<string>();
+            foreach (var sub in result)
+            {
+                if (_tokenCounter.CountTokens(sub) > maxTokens)
+                    final.AddRange(SplitChunkByTokens(sub, maxTokens));
+                else
+                    final.Add(sub);
+            }
+            return final;
         }
     }
 } 

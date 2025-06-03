@@ -100,7 +100,7 @@ namespace DocsDoc.RAG
         /// </summary>
         public WebIngestionService GetWebIngestionService(WebScraperSettings webScraperSettings, RagSettings ragSettings)
         {
-            return new WebIngestionService(_docProcessor, _chunker, _embedder, _vectorStore, webScraperSettings, ragSettings);
+            return new WebIngestionService(_docProcessor, _chunker, _embedder, _vectorStore, webScraperSettings, ragSettings, _embedder as ITokenCountingProvider);
         }
 
         /// <summary>

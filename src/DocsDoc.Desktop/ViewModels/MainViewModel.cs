@@ -9,6 +9,7 @@ using System.Windows.Input;
 using DocsDoc.Core.Services;
 using System.Linq;
 using System.Collections.Generic;
+using DocsDoc.WebScraper.Analysis;
 
 namespace DocsDoc.Desktop.ViewModels
 {
@@ -280,6 +281,26 @@ namespace DocsDoc.Desktop.ViewModels
                 }
             });
             LoggingService.LogInfo("Deselected all documents for RAG");
+        }
+
+        /// <summary>
+        /// Export the current site graph (from cache) to DOT and JSON files.
+        /// </summary>
+        public void ExportSiteGraph()
+        {
+            try
+            {
+                var cacheDir = App.AppConfig?.WebScraper?.CachePath ?? "cache/pages";
+                var parser = new SiteMapParser();
+                var graph = parser.BuildGraphFromCache(cacheDir);
+                parser.ExportToDot(graph, System.IO.Path.Combine(cacheDir, "sitemap.dot"));
+                parser.ExportToJson(graph, System.IO.Path.Combine(cacheDir, "sitemap.json"));
+                SetStatus("Exported site graph to DOT and JSON.");
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Error exporting site graph: {ex.Message}");
+            }
         }
     }
 } 

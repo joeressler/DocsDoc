@@ -53,6 +53,7 @@ namespace DocsDoc.Desktop.ViewModels
 
         public List<string> AllSources { get; set; } = new List<string>();
         public int PageCount => AllSources?.Count ?? 0;
+        public bool IsGroup => PageCount > 1;
         public List<PageInfo> Pages { get; set; } = new List<PageInfo>();
 
         public event PropertyChangedEventHandler? PropertyChanged;
