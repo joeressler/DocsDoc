@@ -60,7 +60,7 @@ public partial class MainWindow : Window
             var urlView = this.FindControl<UserControl>("UrlIngestionView");
             if (urlView != null)
             {
-                urlView.DataContext = new UrlIngestionViewModel(mainVM.WebIngestor, mainVM.SetStatus);
+                urlView.DataContext = new UrlIngestionViewModel(mainVM.WebIngestor, mainVM.SetStatus, this);
                 LoggingService.LogInfo("UrlIngestionViewModel setup completed");
             }
             else

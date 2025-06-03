@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DocsDoc.Desktop.Views.GroupNameDialog"
+        xmlns:vm="clr-namespace:DocsDoc.Desktop.ViewModels"
+        x:DataType="vm:GroupNameDialogViewModel"
+        Width="400" Height="220"
+        Title="Name Document Group">
+    <StackPanel Margin="20" Spacing="10">
+        <TextBlock Text="You are about to ingest a documentation site." FontWeight="Bold"/>
+        <TextBlock Text="Entrypoint URL:" FontWeight="Bold"/>
+        <TextBox Text="{Binding EntrypointUrl, Mode=TwoWay}"/>
+        <TextBlock Text="Base Docs URL:" FontWeight="Bold"/>
+        <TextBox Text="{Binding BaseDocsUrl, Mode=TwoWay}"/>
+        <TextBlock Text="Group Name:" FontWeight="Bold"/>
+        <TextBox Text="{Binding GroupName, Mode=TwoWay}"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">
+            <Button Content="OK" Width="80" IsDefault="True" Command="{Binding OkCommand}"/>
+            <Button Content="Cancel" Width="80" IsCancel="True" Command="{Binding CancelCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</Window> 

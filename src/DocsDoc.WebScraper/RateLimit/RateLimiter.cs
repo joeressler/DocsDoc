@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DocsDoc.Core.Models;
 
 namespace DocsDoc.WebScraper.RateLimit
 {
@@ -11,10 +12,12 @@ namespace DocsDoc.WebScraper.RateLimit
     {
         private readonly Dictionary<string, DateTime> _lastRequest = new Dictionary<string, DateTime>();
         private readonly TimeSpan _minDelay;
+        private readonly WebScraperSettings _settings;
 
-        public RateLimiter(TimeSpan? minDelay = null)
+        public RateLimiter(WebScraperSettings settings)
         {
-            _minDelay = minDelay ?? TimeSpan.FromSeconds(2);
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _minDelay = TimeSpan.FromSeconds(_settings.RateLimitSeconds);
         }
 
         /// <summary>

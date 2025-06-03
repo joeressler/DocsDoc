@@ -1,5 +1,8 @@
 using DocsDoc.Core.Interfaces;
 using DocsDoc.Core.Services;
+using DocsDoc.Core.Models;
+using LLama;
+using LLama.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,15 +11,28 @@ using System.Threading.Tasks;
 namespace DocsDoc.RAG.Embedding
 {
     /// <summary>
-    /// Embedding service using LlamaSharpInferenceService.
+    /// Embedding service using LlamaSharp. Implements IEmbeddingProvider for embedding-only use.
     /// </summary>
-    public class LlamaSharpEmbeddingService : IEmbeddingService
+    public class LlamaSharpEmbeddingService : IEmbeddingProvider
     {
-        private readonly ILlamaSharpInferenceService _llamaService;
+        private readonly ModelSettings _modelSettings;
+        private readonly LLamaWeights _embeddingModel;
+        private readonly LLamaContext _embeddingContext;
 
-        public LlamaSharpEmbeddingService(ILlamaSharpInferenceService llamaService)
+        public LlamaSharpEmbeddingService(ModelSettings modelSettings)
         {
-            _llamaService = llamaService;
+            _modelSettings = modelSettings ?? throw new ArgumentNullException(nameof(modelSettings));
+            string embeddingPath = !string.IsNullOrWhiteSpace(_modelSettings.EmbeddingModelPath) && _modelSettings.EmbeddingModelPath != _modelSettings.Path
+                ? _modelSettings.EmbeddingModelPath
+                : _modelSettings.Path;
+            var modelParams = new ModelParams(embeddingPath!)
+            {
+                ContextSize = (uint)_modelSettings.ContextSize,
+                GpuLayerCount = _modelSettings.GpuLayerCount,
+                // Backend selection can be handled here if needed
+            };
+            _embeddingModel = LLamaWeights.LoadFromFile(modelParams);
+            _embeddingContext = _embeddingModel.CreateContext(modelParams);
         }
 
         public async Task<IReadOnlyList<float[]>> EmbedAsync(IEnumerable<string> texts)
@@ -28,7 +44,8 @@ namespace DocsDoc.RAG.Embedding
                 try
                 {
                     LoggingService.LogInfo($"Embedding chunk {i + 1}");
-                    var embedding = await _llamaService.GetEmbeddingAsync(text);
+                    var embedder = new LLamaEmbedder(_embeddingModel, _embeddingContext.Params, null);
+                    var embedding = await Task.Run(() => embedder.GetEmbeddings(text));
                     if (embedding.Count > 0)
                         results.Add(embedding[0]);
                     else

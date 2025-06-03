@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DocsDoc.Core.Models;
 
 namespace DocsDoc.Core.Interfaces
 {
     /// <summary>
-    /// Provides LlamaSharp model loading, inference, and embedding APIs.
+    /// Provides LlamaSharp model loading, inference, and chat APIs.
     /// </summary>
     public interface ILlamaSharpInferenceService : System.IDisposable
     {
@@ -37,15 +38,15 @@ namespace DocsDoc.Core.Interfaces
         void ClearChatHistory();
 
         /// <summary>
-        /// Get the embedding vector for a text input.
-        /// </summary>
-        Task<IReadOnlyList<float[]>> GetEmbeddingAsync(string text);
-
-        /// <summary>
         /// Reload the model from a new path and/or parameters.
         /// <param name="parameters">Should be LLama.Common.ModelParams if available.</param>
         /// </summary>
         Task ReloadModelAsync(string modelPath, object? parameters = null);
+
+        /// <summary>
+        /// Reload the model from a new ModelSettings object.
+        /// </summary>
+        Task ReloadModelAsync(ModelSettings newModelSettings);
 
         /// <summary>
         /// Aggressively reset the chat session and history, fully re-instantiating all objects.

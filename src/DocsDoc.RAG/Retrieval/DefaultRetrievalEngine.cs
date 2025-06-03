@@ -1,5 +1,6 @@
 using DocsDoc.Core.Interfaces;
 using DocsDoc.Core.Services;
+using DocsDoc.Core.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,22 +12,30 @@ namespace DocsDoc.RAG.Retrieval
     /// </summary>
     public class DefaultRetrievalEngine : IRetrievalEngine
     {
-        private readonly IEmbeddingService _embeddingService;
+        private readonly IEmbeddingProvider _embeddingProvider;
         private readonly IVectorStore _vectorStore;
+        private readonly RagSettings _ragSettings;
 
-        public DefaultRetrievalEngine(IEmbeddingService embeddingService, IVectorStore vectorStore)
+        public DefaultRetrievalEngine(IEmbeddingProvider embeddingProvider, IVectorStore vectorStore, RagSettings ragSettings)
         {
-            _embeddingService = embeddingService;
+            _embeddingProvider = embeddingProvider;
             _vectorStore = vectorStore;
+            _ragSettings = ragSettings ?? throw new System.ArgumentNullException(nameof(ragSettings));
         }
 
         public async Task<IReadOnlyList<string>> RetrieveRelevantChunksAsync(string query, int topK, IEnumerable<string>? documentSources = null)
         {
+            return await RetrieveRelevantChunksAsync(query, (int?)topK, documentSources);
+        }
+
+        public async Task<IReadOnlyList<string>> RetrieveRelevantChunksAsync(string query, int? topK = null, IEnumerable<string>? documentSources = null)
+        {
+            int actualTopK = topK ?? _ragSettings.RetrievalTopK;
             LoggingService.LogInfo($"Embedding query for retrieval: {query}");
-            var queryEmbedding = (await _embeddingService.EmbedAsync(new[] { query })).FirstOrDefault();
+            var queryEmbedding = (await _embeddingProvider.EmbedAsync(new[] { query })).FirstOrDefault();
             if (queryEmbedding == null)
                 return new List<string>();
-            var results = await _vectorStore.SearchAsync(queryEmbedding, topK, documentSources);
+            var results = await _vectorStore.SearchAsync(queryEmbedding, actualTopK, documentSources);
             var texts = new List<string>();
             foreach (var (id, _) in results)
             {

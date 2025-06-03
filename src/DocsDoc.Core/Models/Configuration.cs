@@ -130,7 +130,7 @@ namespace DocsDoc.Core.Models
         private int _maxConcurrentRequests = 2;
         public int MaxConcurrentRequests { get => _maxConcurrentRequests; set => SetField(ref _maxConcurrentRequests, value); }
 
-        private int _maxCrawlDepth = 3;
+        private int _maxCrawlDepth = 5;
         public int MaxCrawlDepth { get => _maxCrawlDepth; set => SetField(ref _maxCrawlDepth, value); }
 
         private List<string>? _allowedDomains = new List<string>();

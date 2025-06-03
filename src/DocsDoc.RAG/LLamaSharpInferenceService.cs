@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using LLama;
 using LLama.Common;
 using System.Linq;
+using DocsDoc.Core.Models;
 
 namespace DocsDoc.RAG
 {
@@ -14,20 +15,18 @@ namespace DocsDoc.RAG
     /// </summary>
     public class LlamaSharpInferenceService : ILlamaSharpInferenceService
     {
+        private ModelSettings _modelSettings;
         private LLamaWeights? _model;
         private LLamaContext? _context;
         private InteractiveExecutor? _executor;
         private ChatSession? _chatSession;
         private ChatHistory? _chatHistory;
-        private string? _modelPath;
-        private ModelParams? _modelParams;
         private bool _disposed;
 
-        public LlamaSharpInferenceService(string modelPath, ModelParams? modelParams = null)
+        public LlamaSharpInferenceService(ModelSettings modelSettings)
         {
-            _modelPath = modelPath;
-            _modelParams = modelParams ?? new ModelParams(_modelPath);
-            LoggingService.LogInfo($"Initializing LlamaSharpInferenceService with model: {_modelPath}");
+            _modelSettings = modelSettings ?? throw new ArgumentNullException(nameof(modelSettings));
+            LoggingService.LogInfo($"Initializing LlamaSharpInferenceService with model: {_modelSettings.Path}");
             LoadModel();
         }
 
@@ -36,19 +35,22 @@ namespace DocsDoc.RAG
             try
             {
                 DisposeResources();
-                _model = LLamaWeights.LoadFromFile(_modelParams!);
-                _context = _model.CreateContext(_modelParams!);
+                var modelParams = new ModelParams(_modelSettings.Path!)
+                {
+                    ContextSize = (uint)_modelSettings.ContextSize,
+                    GpuLayerCount = _modelSettings.GpuLayerCount,
+                    // Backend selection can be handled here if needed
+                };
+                _model = LLamaWeights.LoadFromFile(modelParams);
+                _context = _model.CreateContext(modelParams);
                 _executor = new InteractiveExecutor(_context);
-                
-                // Initialize chat session - system prompt will be added by the calling context (e.g., ChatViewModel)
-                _chatHistory = new ChatHistory(); // Initialize as empty
-                _chatSession = new ChatSession(_executor, _chatHistory); // Session with empty history
-                
-                LoggingService.LogInfo($"Model loaded: {_modelPath}");
+                _chatHistory = new ChatHistory();
+                _chatSession = new ChatSession(_executor, _chatHistory);
+                LoggingService.LogInfo($"Model loaded: {_modelSettings.Path}");
             }
             catch (Exception ex)
             {
-                LoggingService.LogError($"Failed to load model: {_modelPath}", ex);
+                LoggingService.LogError($"Failed to load model: {_modelSettings.Path}", ex);
                 throw;
             }
         }
@@ -111,21 +113,17 @@ namespace DocsDoc.RAG
         {
             EnsureNotDisposed();
             if (_chatSession == null) throw new InvalidOperationException("Chat session not initialized.");
-            
             var infParams = EnsureLlama3InferenceParams(parameters);
             var result = string.Empty;
-            
             try
             {
                 LoggingService.LogInfo($"Processing chat message: {userMessage}");
-                
                 await foreach (var token in _chatSession.ChatAsync(
-                    new ChatHistory.Message(AuthorRole.User, userMessage), 
+                    new LLama.Common.ChatHistory.Message(LLama.Common.AuthorRole.User, userMessage),
                     infParams))
                 {
                     result += token;
                 }
-                
                 LoggingService.LogInfo($"Chat response generated, length: {result.Length}");
                 return result;
             }
@@ -143,14 +141,12 @@ namespace DocsDoc.RAG
         {
             if (_chatHistory != null)
             {
-                _chatHistory.AddMessage(AuthorRole.System, message);
-                
+                _chatHistory.AddMessage(LLama.Common.AuthorRole.System, message);
                 // Rebuild the chat session to ensure the new system message takes effect
                 if (_executor != null)
                 {
                     _chatSession = new ChatSession(_executor, _chatHistory);
                 }
-                
                 LoggingService.LogInfo($"Added system message and rebuilt chat session: {message}");
             }
         }
@@ -163,51 +159,29 @@ namespace DocsDoc.RAG
             if (_chatHistory != null)
             {
                 _chatHistory.Messages.Clear();
-                _chatHistory.AddMessage(AuthorRole.System, 
+                _chatHistory.AddMessage(LLama.Common.AuthorRole.System,
                     "You are a helpful, smart, kind, and efficient AI assistant. You always fulfill the user's requests to the best of your ability.");
-                
                 // Rebuild the chat session with the cleared history
                 if (_executor != null)
                 {
                     _chatSession = new ChatSession(_executor, _chatHistory);
                 }
-                
                 LoggingService.LogInfo("Chat history cleared, reset, and chat session rebuilt");
             }
         }
 
-        public async Task<IReadOnlyList<float[]>> GetEmbeddingAsync(string text)
+        public async Task ReloadModelAsync(ModelSettings newModelSettings)
         {
-            EnsureNotDisposed();
-            if (_context == null) throw new InvalidOperationException("Model not loaded.");
+            _modelSettings = newModelSettings ?? throw new ArgumentNullException(nameof(newModelSettings));
             try
             {
-                LoggingService.LogInfo($"Generating embedding for text: {text}");
-                var embedder = new LLamaEmbedder(_model!, _context.Params, null);
-                var result = await Task.Run(() => embedder.GetEmbeddings(text));
-                LoggingService.LogInfo($"Embedding generated for text: {text}");
-                return result;
-            }
-            catch (Exception ex)
-            {
-                LoggingService.LogError($"Error during embedding for text: {text}", ex);
-                throw;
-            }
-        }
-
-        public async Task ReloadModelAsync(string modelPath, object? parameters = null)
-        {
-            _modelPath = modelPath;
-            _modelParams = parameters as ModelParams ?? new ModelParams(modelPath);
-            try
-            {
-                LoggingService.LogInfo($"Reloading model: {_modelPath}");
+                LoggingService.LogInfo($"Reloading model: {_modelSettings.Path}");
                 await Task.Run(() => LoadModel());
-                LoggingService.LogInfo($"Model reloaded: {_modelPath}");
+                LoggingService.LogInfo($"Model reloaded: {_modelSettings.Path}");
             }
             catch (Exception ex)
             {
-                LoggingService.LogError($"Failed to reload model: {_modelPath}", ex);
+                LoggingService.LogError($"Failed to reload model: {_modelSettings.Path}", ex);
                 throw;
             }
         }
@@ -230,8 +204,23 @@ namespace DocsDoc.RAG
         public async Task NuclearResetAsync()
         {
             LoggingService.LogInfo("Performing nuclear model reload (full model/context reset)");
-            await ReloadModelAsync(_modelPath!, _modelParams);
+            await ReloadModelAsync(_modelSettings);
             LoggingService.LogInfo("Nuclear model reload complete");
+        }
+
+        public async Task ReloadModelAsync(string modelPath, object? parameters = null)
+        {
+            // Construct a new ModelSettings from the provided path and parameters (ModelParams)
+            var modelParams = parameters as ModelParams ?? new ModelParams(modelPath);
+            var newSettings = new ModelSettings
+            {
+                Path = modelPath,
+                ContextSize = (int)modelParams.ContextSize,
+                GpuLayerCount = modelParams.GpuLayerCount,
+                Backend = _modelSettings.Backend,
+                EmbeddingModelPath = _modelSettings.EmbeddingModelPath
+            };
+            await ReloadModelAsync(newSettings);
         }
 
         private void DisposeResources()

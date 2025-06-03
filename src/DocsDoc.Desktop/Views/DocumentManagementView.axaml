@@ -17,10 +17,22 @@
         <ListBox x:Name="DocumentListBox" Height="300" ItemsSource="{Binding Documents}" SelectedItem="{Binding SelectedDocument, Mode=TwoWay}">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:DocumentInfo">
-                    <StackPanel Orientation="Horizontal">
-                        <CheckBox IsChecked="{Binding IsSelectedForRag, Mode=TwoWay}" Margin="0,0,8,0" ToolTip.Tip="Include in RAG queries"/>
-                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,0,8,0"/>
-                        <TextBlock Text="{Binding Path}" FontStyle="Italic"/>
+                    <StackPanel Orientation="Vertical">
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox IsChecked="{Binding IsSelectedForRag, Mode=TwoWay}" Margin="0,0,8,0" ToolTip.Tip="Include in RAG queries"/>
+                            <TextBlock Text="{Binding GroupName}" FontWeight="Bold" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding BaseUrl}" FontStyle="Italic"/>
+                            <TextBlock Text="({Binding PageCount} pages)" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <Expander Header="Show Pages" Margin="24,2,0,0">
+                            <ItemsControl ItemsSource="{Binding Pages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PageInfo">
+                                        <TextBlock Text="{Binding Url}" Foreground="Blue" Cursor="Hand" TextDecorations="Underline" Margin="0,2,0,2" x:Name="PageLink"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Expander>
                     </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>

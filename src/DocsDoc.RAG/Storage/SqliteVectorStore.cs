@@ -1,5 +1,6 @@
 using DocsDoc.Core.Interfaces;
 using DocsDoc.Core.Services;
+using DocsDoc.Core.Models;
 using System;
 using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
@@ -15,12 +16,14 @@ namespace DocsDoc.RAG.Storage
     /// </summary>
     public class SqliteVectorStore : IVectorStore, IDisposable
     {
+        private readonly DatabaseSettings _databaseSettings;
         private readonly string _dbPath;
         private readonly string _connStr;
 
-        public SqliteVectorStore(string dbPath)
+        public SqliteVectorStore(DatabaseSettings databaseSettings)
         {
-            _dbPath = dbPath;
+            _databaseSettings = databaseSettings ?? throw new ArgumentNullException(nameof(databaseSettings));
+            _dbPath = _databaseSettings.VectorStorePath!;
             _connStr = $"Data Source={_dbPath};";
             EnsureSchema();
         }

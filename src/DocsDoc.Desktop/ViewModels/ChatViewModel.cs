@@ -60,12 +60,8 @@ namespace DocsDoc.Desktop.ViewModels
             LoggingService.LogInfo("Initializing ChatViewModel");
             _orchestrator = orchestrator;
             _llmService = orchestrator.LlmService;
-            
-            // Create a retrieval engine that uses the orchestrator's components
-            var embeddingService = new DocsDoc.RAG.Embedding.LlamaSharpEmbeddingService(_llmService);
-            _retriever = new DocsDoc.RAG.Retrieval.DefaultRetrievalEngine(embeddingService, _orchestrator.VectorStore);
+            _retriever = orchestrator.Retriever;
             _contextAugmenter = new DocsDoc.RAG.Retrieval.DefaultContextAugmenter();
-            
             _setStatus = setStatus;
             _mainViewModel = mainViewModel;
             SendMessageCommand = new RelayCommand(async _ => await SendMessageAsync(), _ => !string.IsNullOrWhiteSpace(UserInput));

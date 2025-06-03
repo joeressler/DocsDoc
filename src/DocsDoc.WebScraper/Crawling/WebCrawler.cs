@@ -5,44 +5,49 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DocsDoc.Core.Services;
 using System.Linq;
+using DocsDoc.Core.Models;
+using DocsDoc.WebScraper.Analysis;
+using System.Threading;
 
 namespace DocsDoc.WebScraper.Crawling
 {
     /// <summary>
     /// Crawls documentation sites, respecting domain and depth limits.
     /// </summary>
-    public class WebCrawler
+    public class WebCrawler : IDisposable
     {
         private readonly HttpClient _httpClient;
         private readonly int _maxDepth;
         private readonly List<string>? _allowedDomains;
         private readonly string? _cachePath;
         private readonly int _maxConcurrentRequests;
+        private readonly WebScraperSettings _settings;
+        private readonly SiteMapParser _siteMapParser = new SiteMapParser();
+        private RobotsTxtInfo? _robots;
+        private SemaphoreSlim? _semaphore;
+        private bool _disposed = false;
 
-        public WebCrawler(
-            string? userAgent = null, 
-            int maxDepth = 2, 
-            List<string>? allowedDomains = null, 
-            string? cachePath = null,
-            int maxConcurrentRequests = 2)
+        public WebCrawler(WebScraperSettings settings)
         {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _httpClient = new HttpClient();
-            if (!string.IsNullOrEmpty(userAgent))
+            if (!string.IsNullOrEmpty(_settings.UserAgent))
             {
-                _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+                _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(_settings.UserAgent);
             }
-            _maxDepth = maxDepth;
-            _allowedDomains = allowedDomains;
-            _cachePath = cachePath;
-            _maxConcurrentRequests = maxConcurrentRequests;
+            _maxDepth = _settings.MaxCrawlDepth;
+            _allowedDomains = _settings.AllowedDomains;
+            _cachePath = _settings.CachePath;
+            _maxConcurrentRequests = _settings.MaxConcurrentRequests;
+            _semaphore = new SemaphoreSlim(_maxConcurrentRequests);
         }
 
         /// <summary>
         /// Crawl a site starting from startUrl, up to maxDepth and domain limit.
         /// </summary>
-        public async IAsyncEnumerable<(string url, string html)> Crawl(string startUrl)
+        public async IAsyncEnumerable<(string url, string html)> Crawl(string startUrl, string? baseDocsUrl = null)
         {
-            LoggingService.LogInfo($"Starting web crawl from: {startUrl}, configured maxDepth: {_maxDepth}");
+            LoggingService.LogInfo($"Starting web crawl from: {startUrl}, configured maxDepth: {_maxDepth}, baseDocsUrl restriction: {baseDocsUrl}");
             
             var queue = new Queue<(string url, int depth)>();
             var visited = new HashSet<string>();
@@ -51,9 +56,16 @@ namespace DocsDoc.WebScraper.Crawling
             string primaryDomain = new Uri(startUrl).Host;
             LoggingService.LogInfo($"Crawling primary domain: {primaryDomain}");
 
-            if (_allowedDomains != null && _allowedDomains.Any() && !_allowedDomains.Contains(primaryDomain, StringComparer.OrdinalIgnoreCase))
+            // Fetch robots.txt
+            _robots = await _siteMapParser.GetRobotsTxtAsync(startUrl);
+            if (_robots.CrawlDelay.HasValue)
+                LoggingService.LogInfo($"robots.txt crawl-delay: {_robots.CrawlDelay.Value}");
+
+            // Fetch and enqueue sitemap URLs
+            var sitemapUrls = await _siteMapParser.GetSitemapUrlsAsync(startUrl);
+            foreach (var url in sitemapUrls)
             {
-                LoggingService.LogError($"The start URL's domain '{primaryDomain}' is not in the allowed domains list. Crawling will be restricted or might not proceed as expected.", null);
+                queue.Enqueue((url, 1));
             }
 
             int processedCount = 0;
@@ -69,26 +81,61 @@ namespace DocsDoc.WebScraper.Crawling
                     isAllowedDomain = _allowedDomains.Contains(currentUri.Host, StringComparer.OrdinalIgnoreCase);
                 }
                 
-                if (visited.Contains(url) || depth > _maxDepth || !isAllowedDomain)
+                bool isAllowedPrefix = string.IsNullOrEmpty(baseDocsUrl) || url.StartsWith(baseDocsUrl, StringComparison.OrdinalIgnoreCase);
+                if (visited.Contains(url) || depth > _maxDepth || !isAllowedDomain || !isAllowedPrefix)
                 {
-                    LoggingService.LogInfo($"Skipping URL: {url} (visited: {visited.Contains(url)}, depth: {depth}/{_maxDepth}, domain allowed: {isAllowedDomain})");
+                    LoggingService.LogInfo($"Skipping URL: {url} (visited: {visited.Contains(url)}, depth: {depth}/{_maxDepth}, domain allowed: {isAllowedDomain}, prefix allowed: {isAllowedPrefix})");
+                    continue;
+                }
+                
+                if (_robots != null && !_robots.IsPathAllowed(currentUri.AbsolutePath))
+                {
+                    LoggingService.LogInfo($"robots.txt disallows: {url}");
                     continue;
                 }
                 
                 visited.Add(url);
                 LoggingService.LogInfo($"Processing URL: {url} (depth: {depth})");
                 
+                await (_semaphore?.WaitAsync() ?? Task.CompletedTask);
                 string html = string.Empty;
                 try 
                 { 
-                    html = await _httpClient.GetStringAsync(url);
+                    // robots.txt crawl-delay
+                    if (_robots?.CrawlDelay is int delay && delay > 0)
+                        await Task.Delay(delay * 1000);
+                    // Check cache
+                    if (!string.IsNullOrWhiteSpace(_cachePath))
+                    {
+                        var cacheFile = System.IO.Path.Combine(_cachePath, GetCacheFileName(url));
+                        if (System.IO.File.Exists(cacheFile))
+                        {
+                            html = await System.IO.File.ReadAllTextAsync(cacheFile);
+                            LoggingService.LogInfo($"Loaded from cache: {url}");
+                        }
+                        else
+                        {
+                            html = await _httpClient.GetStringAsync(url);
+                            System.IO.Directory.CreateDirectory(_cachePath);
+                            await System.IO.File.WriteAllTextAsync(cacheFile, html);
+                            LoggingService.LogInfo($"Fetched and cached: {url}");
+                        }
+                    }
+                    else
+                    {
+                        html = await _httpClient.GetStringAsync(url);
+                        LoggingService.LogInfo($"Fetched (no cache): {url}");
+                    }
                     processedCount++;
-                    LoggingService.LogInfo($"Successfully fetched content from: {url} (length: {html.Length})");
                 } 
                 catch (Exception ex)
                 {
                     LoggingService.LogError($"Failed to fetch content from: {url}", ex);
                     continue;
+                }
+                finally
+                {
+                    _semaphore?.Release();
                 }
                 
                 yield return (url, html);
@@ -107,6 +154,12 @@ namespace DocsDoc.WebScraper.Crawling
             }
             
             LoggingService.LogInfo($"Web crawl completed. Processed {processedCount} pages, visited {visited.Count} URLs total");
+        }
+
+        private string GetCacheFileName(string url)
+        {
+            var hash = url.GetHashCode().ToString("X");
+            return hash + ".html";
         }
 
         private IEnumerable<string> ExtractLinks(string html, string baseScheme, string baseDomain)
@@ -160,6 +213,13 @@ namespace DocsDoc.WebScraper.Crawling
             }
             
             LoggingService.LogInfo($"Link extraction completed, found {extractedCount} valid links matching allowed domains from {baseScheme}://{baseDomain}");
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _semaphore?.Dispose();
+            _disposed = true;
         }
     }
 } 

@@ -38,24 +38,21 @@ namespace DocsDoc.Desktop.ViewModels
         public MainViewModel()
         {
             // Use App.AppConfig for paths
-            var modelPath = App.AppConfig?.Model?.Path ?? "";
+            var modelSettings = App.AppConfig?.Model;
+            var databaseSettings = App.AppConfig?.Database;
+            var ragSettings = App.AppConfig?.RAG;
             var dbPath = App.AppConfig?.Database?.VectorStorePath ?? "rag.sqlite";
-            var ragChunkSize = App.AppConfig?.RAG?.ChunkSize ?? 512;
-            var ragChunkOverlap = App.AppConfig?.RAG?.ChunkOverlap ?? 64;
-            var ragRetrievalTopK = App.AppConfig?.RAG?.RetrievalTopK ?? 5;
+            var ragChunkSize = ragSettings?.ChunkSize ?? 512;
+            var ragChunkOverlap = ragSettings?.ChunkOverlap ?? 64;
+            var ragRetrievalTopK = ragSettings?.RetrievalTopK ?? 5;
 
-            var webScraperUserAgent = App.AppConfig?.WebScraper?.UserAgent;
-            var webScraperRateLimit = App.AppConfig?.WebScraper?.RateLimitSeconds ?? 2;
-            var webScraperMaxConcurrent = App.AppConfig?.WebScraper?.MaxConcurrentRequests ?? 2;
-            var webScraperMaxDepth = App.AppConfig?.WebScraper?.MaxCrawlDepth ?? 3;
-            var webScraperAllowedDomains = App.AppConfig?.WebScraper?.AllowedDomains;
-            var webScraperCachePath = App.AppConfig?.WebScraper?.CachePath;
+            var webScraperSettings = App.AppConfig?.WebScraper;
 
-            LoggingService.LogInfo($"Initializing MainViewModel with model: {modelPath}, db: {dbPath}");
+            LoggingService.LogInfo($"Initializing MainViewModel with model: {modelSettings?.Path}, db: {databaseSettings?.VectorStorePath}");
             try
             {
-                Orchestrator = new RagOrchestrator(modelPath, dbPath, ragChunkSize, ragChunkOverlap, ragRetrievalTopK);
-                WebIngestor = Orchestrator.GetWebIngestionService(webScraperUserAgent, webScraperRateLimit, webScraperMaxConcurrent, webScraperMaxDepth, webScraperAllowedDomains, webScraperCachePath);
+                Orchestrator = new RagOrchestrator(modelSettings, databaseSettings, ragSettings, ragChunkSize, ragChunkOverlap, ragRetrievalTopK);
+                WebIngestor = Orchestrator.GetWebIngestionService(webScraperSettings, ragSettings);
                 IngestDocumentCommand = new RelayCommand(async path => await IngestDocumentAsync(path as string), path => path is string s && !string.IsNullOrWhiteSpace(s));
                 RemoveDocumentCommand = new RelayCommand(async doc => await RemoveDocumentAsync(doc as DocumentInfo), doc => doc is DocumentInfo);
                 ReIngestDocumentCommand = new RelayCommand(async doc => await ReIngestDocumentAsync(doc as DocumentInfo), doc => doc is DocumentInfo);
@@ -96,18 +93,51 @@ namespace DocsDoc.Desktop.ViewModels
             {
                 LoggingService.LogInfo("Loading existing documents from vector store");
                 SetStatus("Loading existing documents...");
-                
                 var documentSources = await Orchestrator.VectorStore.GetAllDocumentSourcesAsync();
                 LoggingService.LogInfo($"Found {documentSources.Count} existing documents in vector store");
-                
-                // Add documents to UI
+
+                // Group by groupName only
+                var groupDict = new Dictionary<string, DocumentInfo>();
                 foreach (var source in documentSources)
                 {
-                    var docInfo = new DocumentInfo { Name = source, Path = source };
-                    Documents.Add(docInfo);
+                    string groupName;
+                    string pageUrl;
+                    if (source.Contains("|"))
+                    {
+                        var parts = source.Split('|');
+                        groupName = parts[0];
+                        if (parts.Length > 2)
+                            pageUrl = parts[2];
+                        else if (parts.Length > 1)
+                            pageUrl = parts[1];
+                        else
+                            pageUrl = source;
+                    }
+                    else
+                    {
+                        groupName = System.IO.Path.GetFileNameWithoutExtension(source);
+                        pageUrl = source;
+                    }
+                    if (!groupDict.TryGetValue(groupName, out var docInfo))
+                    {
+                        docInfo = new DocumentInfo
+                        {
+                            Name = groupName,
+                            Path = source, // Could use first source as path
+                            AllSources = new List<string>(),
+                            Pages = new List<PageInfo>()
+                        };
+                        groupDict[groupName] = docInfo;
+                    }
+                    docInfo.AllSources.Add(source);
+                    docInfo.Pages.Add(new PageInfo { Url = pageUrl });
                 }
-                
-                SetStatus($"Loaded {documentSources.Count} existing documents");
+                // Add to Documents collection
+                foreach (var doc in groupDict.Values)
+                {
+                    Documents.Add(doc);
+                }
+                SetStatus($"Loaded {groupDict.Count} document groups");
             }
             catch (Exception ex)
             {
@@ -126,26 +156,31 @@ namespace DocsDoc.Desktop.ViewModels
             {
                 SetStatus($"Ingesting document: {filePath}");
                 await Orchestrator.IngestDocumentAsync(filePath);
-                var fileName = System.IO.Path.GetFileName(filePath);
-                var docInfo = new DocumentInfo { Name = fileName, Path = filePath };
-                
-                // Check if document already exists in list (prevent duplicates)
-                bool exists = false;
-                foreach (var existingDoc in Documents)
+                // Determine groupName for file
+                string groupName = System.IO.Path.GetFileNameWithoutExtension(filePath);
+                // Check if group already exists
+                var existingDoc = Documents.FirstOrDefault(d => d.Name == groupName);
+                if (existingDoc != null)
                 {
-                    if (existingDoc.Name == fileName)
+                    // Add new source/page to existing group
+                    if (!existingDoc.AllSources.Contains(filePath))
                     {
-                        exists = true;
-                        break;
+                        existingDoc.AllSources.Add(filePath);
+                        existingDoc.Pages.Add(new PageInfo { Url = filePath });
                     }
                 }
-                
-                if (!exists)
+                else
                 {
+                    var docInfo = new DocumentInfo
+                    {
+                        Name = groupName,
+                        Path = filePath,
+                        AllSources = new List<string> { filePath },
+                        Pages = new List<PageInfo> { new PageInfo { Url = filePath } }
+                    };
                     Documents.Add(docInfo);
                 }
-                
-                SetStatus($"Ingested document: {fileName}");
+                SetStatus($"Ingested document: {groupName}");
                 LoggingService.LogInfo($"Document ingestion completed successfully: {filePath}");
             }
             catch (Exception ex)
@@ -166,20 +201,17 @@ namespace DocsDoc.Desktop.ViewModels
                 LoggingService.LogInfo("Remove document called with null document");
                 return;
             }
-            
             LoggingService.LogInfo($"Starting document removal: {doc.Name}");
             try
             {
-                SetStatus($"Removing document: {doc.Name}");
-                
-                // Remove from vector store using the document name (which is the source)
+                SetStatus($"Removing document group: {doc.Name}");
+                // Remove from vector store using the group name (removes all sources for the group)
                 await Orchestrator.VectorStore.DeleteDocumentAsync(doc.Name);
-                LoggingService.LogInfo($"Deleted document from vector store: {doc.Name}");
-                
+                LoggingService.LogInfo($"Deleted document group from vector store: {doc.Name}");
                 // Remove from UI
                 Documents.Remove(doc);
-                SetStatus($"Removed document: {doc.Name}");
-                LoggingService.LogInfo($"Document removal completed successfully: {doc.Name}");
+                SetStatus($"Removed document group: {doc.Name}");
+                LoggingService.LogInfo($"Document group removal completed successfully: {doc.Name}");
             }
             catch (Exception ex)
             {
@@ -214,7 +246,10 @@ namespace DocsDoc.Desktop.ViewModels
         /// </summary>
         public IEnumerable<string> GetSelectedDocumentSources()
         {
-            return Documents.Where(d => d.IsSelectedForRag).Select(d => d.Name);
+            // Return all actual document sources for selected groups
+            return Documents.Where(d => d.IsSelectedForRag)
+                            .SelectMany(d => d.AllSources)
+                            .Distinct();
         }
 
         /// <summary>

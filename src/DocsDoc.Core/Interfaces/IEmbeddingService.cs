@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 namespace DocsDoc.Core.Interfaces
 {
     /// <summary>
-    /// Generates vector embeddings for text chunks.
+    /// Provides embedding-only functionality for text chunks. Not for LLMs.
     /// </summary>
-    public interface IEmbeddingService
+    public interface IEmbeddingProvider
     {
         /// <summary>
         /// Generate embeddings for a list of text chunks.

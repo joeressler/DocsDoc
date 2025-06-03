@@ -5,6 +5,7 @@ using DocsDoc.Core.Models;
 using DocsDoc.Core.Services;
 using DocsDoc.Desktop.Views;
 using System;
+using Avalonia.Styling;
 
 namespace DocsDoc.Desktop;
 
@@ -37,6 +38,17 @@ public partial class App : Application
                 var configService = new ConfigurationService();
                 AppConfig = configService.Load();
             }
+
+            // Set theme variant from config
+            var theme = AppConfig?.UI?.Theme?.ToLowerInvariant();
+            ThemeVariant? themeVariant = theme switch
+            {
+                "light" => ThemeVariant.Light,
+                "dark" => ThemeVariant.Dark,
+                _ => ThemeVariant.Default
+            };
+            this.RequestedThemeVariant = themeVariant;
+            LoggingService.LogInfo($"Set Avalonia RequestedThemeVariant to: {themeVariant}");
 
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {

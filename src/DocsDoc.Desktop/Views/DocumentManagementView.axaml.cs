@@ -5,6 +5,8 @@ using DocsDoc.Core.Services;
 using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using System;
+using System.Diagnostics;
+using Avalonia.VisualTree;
 
 namespace DocsDoc.Desktop.Views
 {
@@ -15,6 +17,7 @@ namespace DocsDoc.Desktop.Views
             LoggingService.LogInfo("Initializing DocumentManagementView");
             InitializeComponent();
             this.FindControl<Button>("AddDocumentButton").Click += AddDocumentButton_Click;
+            WireUpPageLinkClicks();
             LoggingService.LogInfo("DocumentManagementView initialized successfully");
         }
 
@@ -55,6 +58,47 @@ namespace DocsDoc.Desktop.Views
             catch (Exception ex)
             {
                 LoggingService.LogError("Error in file picker dialog", ex);
+            }
+        }
+
+        private void WireUpPageLinkClicks()
+        {
+            // Find all PageLink TextBlocks in the visual tree and wire up PointerPressed
+            var listBox = this.FindControl<ListBox>("DocumentListBox");
+            if (listBox == null) return;
+            listBox.AttachedToVisualTree += (s, e) =>
+            {
+                WireLinksRecursive(listBox);
+            };
+        }
+
+        private void WireLinksRecursive(Avalonia.Controls.Control parent)
+        {
+            foreach (var child in parent.GetVisualDescendants())
+            {
+                if (child is Avalonia.Controls.TextBlock tb && tb.Name == "PageLink")
+                {
+                    tb.PointerPressed += OnPageLinkClicked;
+                }
+            }
+        }
+
+        private void OnPageLinkClicked(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+        {
+            if (sender is Avalonia.Controls.TextBlock tb && tb.DataContext is PageInfo page)
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = page.Url,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    DocsDoc.Core.Services.LoggingService.LogError($"Failed to open page URL: {page.Url}", ex);
+                }
             }
         }
     }

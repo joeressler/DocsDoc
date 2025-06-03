@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System;
 using DocsDoc.WebScraper;
+using DocsDoc.Core.Models;
 
 namespace DocsDoc.RAG
 {
@@ -20,11 +21,14 @@ namespace DocsDoc.RAG
     {
         private readonly IDocumentProcessor _docProcessor;
         private readonly ITextChunker _chunker;
-        private readonly IEmbeddingService _embedder;
+        private readonly IEmbeddingProvider _embedder;
         private readonly IVectorStore _vectorStore;
         private readonly IRetrievalEngine _retriever;
         private readonly IContextAugmenter _contextAugmenter;
         private readonly ILlamaSharpInferenceService _llm;
+        private readonly ModelSettings _modelSettings;
+        private readonly DatabaseSettings _databaseSettings;
+        private readonly RagSettings _ragSettings;
         private bool _disposed = false;
 
         private readonly int _ragChunkSize;
@@ -41,15 +45,20 @@ namespace DocsDoc.RAG
         /// </summary>
         public IVectorStore VectorStore => _vectorStore;
 
-        public RagOrchestrator(string modelPath, string dbPath, 
+        public IRetrievalEngine Retriever => _retriever;
+
+        public RagOrchestrator(ModelSettings modelSettings, DatabaseSettings databaseSettings, RagSettings ragSettings,
                                 int ragChunkSize = 512, int ragChunkOverlap = 64, int ragRetrievalTopK = 5)
         {
+            _modelSettings = modelSettings;
+            _databaseSettings = databaseSettings;
+            _ragSettings = ragSettings;
             _docProcessor = new DefaultDocumentProcessor();
-            _chunker = new DefaultTextChunker();
-            _llm = new LlamaSharpInferenceService(modelPath);
-            _embedder = new LlamaSharpEmbeddingService(_llm);
-            _vectorStore = new SqliteVectorStore(dbPath);
-            _retriever = new DefaultRetrievalEngine(_embedder, _vectorStore);
+            _chunker = new DefaultTextChunker(_ragSettings);
+            _llm = new LlamaSharpInferenceService(_modelSettings);
+            _embedder = new LlamaSharpEmbeddingService(_modelSettings);
+            _vectorStore = new SqliteVectorStore(_databaseSettings);
+            _retriever = new DefaultRetrievalEngine(_embedder, _vectorStore, _ragSettings);
             _contextAugmenter = new DefaultContextAugmenter();
 
             _ragChunkSize = ragChunkSize;
@@ -89,16 +98,9 @@ namespace DocsDoc.RAG
         /// <summary>
         /// Get a WebIngestionService wired to this orchestrator's RAG pipeline.
         /// </summary>
-        public WebIngestionService GetWebIngestionService(
-            string? userAgent = null,
-            int rateLimitSeconds = 2,
-            int maxConcurrentRequests = 2,
-            int maxCrawlDepth = 3,
-            IEnumerable<string>? allowedDomains = null,
-            string? cachePath = null)
+        public WebIngestionService GetWebIngestionService(WebScraperSettings webScraperSettings, RagSettings ragSettings)
         {
-            return new WebIngestionService(_docProcessor, _chunker, _embedder, _vectorStore, 
-                                           userAgent, rateLimitSeconds, maxConcurrentRequests, maxCrawlDepth, allowedDomains?.ToList(), cachePath);
+            return new WebIngestionService(_docProcessor, _chunker, _embedder, _vectorStore, webScraperSettings, ragSettings);
         }
 
         /// <summary>

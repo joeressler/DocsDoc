@@ -22,30 +22,25 @@ class Program
             App.AppConfig = config; // Set it early for global access
 
             // Configure logging using path from config
-            LoggingService.Configure(App.AppConfig.Logging?.LogFilePath);
+            LoggingService.Configure(App.AppConfig.Logging);
             LoggingService.LogInfo("DocsDoc Desktop starting up...");
             
-            var modelPath = App.AppConfig.Model?.Path ?? "";
-            var modelContextSize = App.AppConfig.Model?.ContextSize ?? 512;
-            var modelGpuLayers = App.AppConfig.Model?.GpuLayerCount ?? 0;
-            
+            var modelSettings = App.AppConfig.Model;
             // Test LlamaSharp model loading first
-            LoggingService.LogInfo($"Testing LlamaSharp model loading from: {modelPath}");
-            if (!System.IO.File.Exists(modelPath))
+            LoggingService.LogInfo($"Testing LlamaSharp model loading from: {modelSettings?.Path}");
+            if (modelSettings == null || string.IsNullOrWhiteSpace(modelSettings.Path) || !System.IO.File.Exists(modelSettings.Path))
             {
-                LoggingService.LogError($"Model file not found: {modelPath}", new System.IO.FileNotFoundException(modelPath));
-                Console.WriteLine($"Model file not found: {modelPath}");
+                LoggingService.LogError($"Model file not found: {modelSettings?.Path}", new System.IO.FileNotFoundException(modelSettings?.Path));
+                Console.WriteLine($"Model file not found: {modelSettings?.Path}");
                 Console.WriteLine($"Current directory: {System.IO.Directory.GetCurrentDirectory()}");
-                Console.WriteLine($"Looking for model at: {System.IO.Path.GetFullPath(modelPath)}");
+                Console.WriteLine($"Looking for model at: {System.IO.Path.GetFullPath(modelSettings?.Path ?? "")}");
                 return;
             }
-            
-            var parameters = new ModelParams(modelPath)
+            var parameters = new ModelParams(modelSettings.Path)
             {
-                ContextSize = (uint)modelContextSize, 
-                GpuLayerCount = modelGpuLayers
+                ContextSize = (uint)modelSettings.ContextSize,
+                GpuLayerCount = modelSettings.GpuLayerCount
             };
-            
             LoggingService.LogInfo("Loading LlamaSharp model...");
             using var model = LLamaWeights.LoadFromFile(parameters);
             LoggingService.LogInfo("LlamaSharp model loaded successfully!");

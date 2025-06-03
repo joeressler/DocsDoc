@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System;
+using System.Collections.Generic;
 
 namespace DocsDoc.Desktop.ViewModels
 {
@@ -31,7 +32,36 @@ namespace DocsDoc.Desktop.ViewModels
             } 
         }
 
+        public string GroupName
+        {
+            get
+            {
+                if (Name.Contains("|"))
+                    return Name.Split('|')[0];
+                return Name;
+            }
+        }
+        public string BaseUrl
+        {
+            get
+            {
+                if (Name.Contains("|"))
+                    return Name.Split('|')[1];
+                return Path;
+            }
+        }
+
+        public List<string> AllSources { get; set; } = new List<string>();
+        public int PageCount => AllSources?.Count ?? 0;
+        public List<PageInfo> Pages { get; set; } = new List<PageInfo>();
+
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    public class PageInfo
+    {
+        public string Url { get; set; } = string.Empty;
+        // Optionally add Title, etc.
     }
 } 

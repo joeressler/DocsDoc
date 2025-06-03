@@ -10,7 +10,7 @@ namespace DocsDoc.Tests
         [Fact]
         public void ChunkText_NoOverlap_Works()
         {
-            var chunker = new DefaultTextChunker();
+            var chunker = new DefaultTextChunker(new DocsDoc.Core.Models.RagSettings());
             string text = string.Join(" ", Enumerable.Range(1, 10));
             var chunks = chunker.ChunkText(text, 4, 0);
             Assert.Equal(3, chunks.Count);
@@ -22,7 +22,7 @@ namespace DocsDoc.Tests
         [Fact]
         public void ChunkText_WithOverlap_Works()
         {
-            var chunker = new DefaultTextChunker();
+            var chunker = new DefaultTextChunker(new DocsDoc.Core.Models.RagSettings());
             string text = string.Join(" ", Enumerable.Range(1, 8));
             var chunks = chunker.ChunkText(text, 4, 2);
             Assert.Equal(3, chunks.Count);
@@ -34,7 +34,7 @@ namespace DocsDoc.Tests
         [Fact]
         public void ChunkText_ChunkSizeLargerThanText_OneChunk()
         {
-            var chunker = new DefaultTextChunker();
+            var chunker = new DefaultTextChunker(new DocsDoc.Core.Models.RagSettings());
             string text = "one two three";
             var chunks = chunker.ChunkText(text, 10, 0);
             Assert.Single(chunks);
@@ -44,7 +44,7 @@ namespace DocsDoc.Tests
         [Fact]
         public void ChunkText_InvalidParameters_Throws()
         {
-            var chunker = new DefaultTextChunker();
+            var chunker = new DefaultTextChunker(new DocsDoc.Core.Models.RagSettings());
             Assert.Throws<ArgumentOutOfRangeException>(() => chunker.ChunkText("text", 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => chunker.ChunkText("text", 2, -1));
         }

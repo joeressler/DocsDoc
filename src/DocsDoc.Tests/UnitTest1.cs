@@ -100,7 +100,7 @@ public class UnitTest1
     [Fact]
     public void WebCrawler_ExtractLinks_Works()
     {
-        var crawler = new WebCrawler();
+        var crawler = new WebCrawler(new DocsDoc.Core.Models.WebScraperSettings());
         string html = @"<a href=""https://site.com/page1"">Page1</a> <a href='page2'>Page2</a> <a href=""/page3"">Page3</a>";
         var links = crawler.GetType().GetMethod("ExtractLinks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             .Invoke(crawler, new object[] { html, "site.com" }) as IEnumerable<string>;
@@ -138,7 +138,7 @@ public class WebScraperUnitTests
     [Fact]
     public void WebCrawler_ExtractLinks_Works()
     {
-        var crawler = new WebCrawler();
+        var crawler = new WebCrawler(new DocsDoc.Core.Models.WebScraperSettings());
         string html = @"<a href=""https://site.com/page1"">Page1</a> <a href='page2'>Page2</a> <a href=""/page3"">Page3</a>";
         var links = crawler.GetType().GetMethod("ExtractLinks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             .Invoke(crawler, new object[] { html, "site.com" }) as IEnumerable<string>;

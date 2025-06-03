@@ -48,7 +48,10 @@ namespace DocsDoc.Tests
             string docText = "The capital of France is Paris. Paris is known for the Eiffel Tower.";
             await File.WriteAllTextAsync(docPath, docText);
 
-            var rag = new RagOrchestrator(modelPath, dbPath);
+            var modelSettings = new DocsDoc.Core.Models.ModelSettings { Path = modelPath };
+            var databaseSettings = new DocsDoc.Core.Models.DatabaseSettings { VectorStorePath = dbPath };
+            var ragSettings = new DocsDoc.Core.Models.RagSettings();
+            var rag = new RagOrchestrator(modelSettings, databaseSettings, ragSettings);
             await rag.IngestDocumentAsync(docPath, chunkSize: 10, overlap: 0);
             LoggingService.LogInfo("Document ingested.");
 
