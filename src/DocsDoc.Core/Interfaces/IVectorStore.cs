@@ -35,5 +35,10 @@ namespace DocsDoc.Core.Interfaces
         /// Delete all embeddings and chunks associated with a specific document source.
         /// </summary>
         Task DeleteDocumentAsync(string documentSource);
+
+        /// <summary>
+        /// Delete all embeddings and chunks associated with a document group (by group name prefix).
+        /// </summary>
+        Task DeleteDocumentGroupAsync(string groupName);
     }
 } 

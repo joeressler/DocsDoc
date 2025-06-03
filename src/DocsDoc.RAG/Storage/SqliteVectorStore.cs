@@ -273,6 +273,44 @@ namespace DocsDoc.RAG.Storage
             LoggingService.LogInfo($"Deleted {deletedRows} embeddings for document source: {documentSource}");
         }
 
+        public async Task DeleteDocumentGroupAsync(string groupName)
+        {
+            using var conn = new SqliteConnection(_connStr);
+            await conn.OpenAsync();
+
+            // Check if document_source column exists
+            using var schemaCmd = conn.CreateCommand();
+            schemaCmd.CommandText = "PRAGMA table_info(vectors);";
+            using var schemaReader = await schemaCmd.ExecuteReaderAsync();
+            bool hasDocumentSource = false;
+            while (await schemaReader.ReadAsync())
+            {
+                if (schemaReader.GetString(1) == "document_source")
+                {
+                    hasDocumentSource = true;
+                    break;
+                }
+            }
+            schemaReader.Close();
+
+            using var cmd = conn.CreateCommand();
+            if (hasDocumentSource)
+            {
+                // Delete all where document_source starts with 'groupName|'
+                cmd.CommandText = "DELETE FROM vectors WHERE document_source LIKE @group_prefix;";
+                cmd.Parameters.AddWithValue("@group_prefix", groupName + "|%");
+            }
+            else
+            {
+                // Delete based on ID pattern
+                cmd.CommandText = "DELETE FROM vectors WHERE id LIKE @id_pattern;";
+                cmd.Parameters.AddWithValue("@id_pattern", groupName + "|%");
+            }
+
+            var deletedRows = await cmd.ExecuteNonQueryAsync();
+            LoggingService.LogInfo($"Deleted {deletedRows} embeddings for document group: {groupName}");
+        }
+
         private static float CosineSimilarity(float[] a, float[] b)
         {
             if (a.Length != b.Length) return 0f;

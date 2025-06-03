@@ -207,7 +207,7 @@ namespace DocsDoc.Desktop.ViewModels
             {
                 SetStatus($"Removing document group: {doc.Name}");
                 // Remove from vector store using the group name (removes all sources for the group)
-                await Orchestrator.VectorStore.DeleteDocumentAsync(doc.Name);
+                await Orchestrator.VectorStore.DeleteDocumentGroupAsync(doc.Name);
                 LoggingService.LogInfo($"Deleted document group from vector store: {doc.Name}");
                 // Remove from UI
                 Documents.Remove(doc);
